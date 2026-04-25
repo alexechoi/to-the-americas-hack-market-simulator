@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 
 import { AgentReasoning } from "@/app/components/sim/AgentReasoning";
 import { AgentSwarm } from "@/app/components/sim/AgentSwarm";
-import { CohortLegend } from "@/app/components/sim/CohortLegend";
 import { HeadlineInjector } from "@/app/components/sim/HeadlineInjector";
 import { NewsFeed } from "@/app/components/sim/NewsFeed";
 import { OrderTape } from "@/app/components/sim/OrderTape";
@@ -122,30 +121,31 @@ export default function SimPage() {
 
       {/* Workspace fills remaining viewport */}
       <main className="grid min-h-0 flex-1 grid-cols-12 gap-3 p-3">
-        {/* Left column · cohorts + injector */}
-        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
+        {/* Left column · agent swarm hero */}
+        <div className="col-span-12 flex min-h-0 lg:col-span-4">
           <Panel
-            title="Population"
-            caption={`${cohortStats.agents} agents`}
-            right={<Tag tone="muted">8 archetypes</Tag>}
+            title="Agent swarm"
+            caption={`${cohortStats.agents} agents · cohort layout`}
+            right={
+              <LiveDot
+                label={paused ? "Paused" : "Acting"}
+                tone={paused ? "paused" : "live"}
+              />
+            }
             flush
             className="min-h-0 flex-1"
-            bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
+            bodyClassName="min-h-0 flex-1 bg-grid-fine"
           >
-            <CohortLegend
+            <AgentSwarm
               agents={snapshot?.agents ?? []}
               decisions={snapshot?.decisions ?? []}
-              referenceTs={snapshot?.simulatedAt ?? 0}
+              height={240}
             />
-          </Panel>
-
-          <Panel title="Inject headline" caption="⌘↵" className="shrink-0">
-            <HeadlineInjector onInject={controls.injectHeadline} />
           </Panel>
         </div>
 
-        {/* Center column · chart + swarm/tape */}
-        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-6">
+        {/* Center column · chart + order tape */}
+        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5">
           <Panel
             title="Price action"
             caption={`${snapshot?.prices.length ?? 0} ticks`}
@@ -156,7 +156,7 @@ export default function SimPage() {
               </div>
             }
             flush
-            className="min-h-0 flex-[1.6]"
+            className="min-h-0 flex-[1.8]"
             bodyClassName="min-h-0 flex-1 bg-grid-fine relative"
           >
             {snapshot && (
@@ -169,40 +169,23 @@ export default function SimPage() {
             )}
           </Panel>
 
-          <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
-            <Panel
-              title="Agent swarm"
-              caption="cohort layout"
-              right={
-                <LiveDot
-                  label={paused ? "Paused" : "Acting"}
-                  tone={paused ? "paused" : "live"}
-                />
-              }
-              flush
-              className="min-h-0"
-              bodyClassName="min-h-0 flex-1 bg-grid-fine"
-            >
-              <AgentSwarm
-                agents={snapshot?.agents ?? []}
-                decisions={snapshot?.decisions ?? []}
-                height={160}
-              />
-            </Panel>
-            <Panel
-              title="Order tape"
-              caption="last 14 fills"
-              flush
-              className="min-h-0"
-              bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
-            >
-              <OrderTape decisions={snapshot?.decisions ?? []} />
-            </Panel>
-          </div>
+          <Panel
+            title="Order tape"
+            caption="last 14 fills"
+            flush
+            className="min-h-0 flex-1"
+            bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
+          >
+            <OrderTape decisions={snapshot?.decisions ?? []} />
+          </Panel>
         </div>
 
-        {/* Right column · news + scenarios + reasoning */}
+        {/* Right column · inject + news + reasoning + scenarios */}
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
+          <Panel title="Inject headline" caption="⌘↵" className="shrink-0">
+            <HeadlineInjector onInject={controls.injectHeadline} />
+          </Panel>
+
           <Panel
             title="News tape"
             caption={`${cohortStats.news} headlines`}
@@ -214,25 +197,24 @@ export default function SimPage() {
           </Panel>
 
           <Panel
-            title="Scenario probability"
-            caption="population dispersion"
-            right={<Tag tone="accent">Sellable</Tag>}
-            flush
-            className="shrink-0"
-            bodyClassName="overflow-x-auto"
-          >
-            <ScenarioTable rows={snapshot?.scenarios ?? []} />
-          </Panel>
-
-          <Panel
             title="Agent reasoning"
             caption="streaming"
             right={<Tag tone="neutral">{snapshot?.decisions.length ?? 0}</Tag>}
             flush
-            className="min-h-0 flex-[1.2]"
+            className="min-h-0 flex-1"
             bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
           >
             <AgentReasoning decisions={snapshot?.decisions ?? []} />
+          </Panel>
+
+          <Panel
+            title="Scenarios"
+            caption="population dispersion"
+            right={<Tag tone="accent">Sellable</Tag>}
+            flush
+            className="shrink-0"
+          >
+            <ScenarioTable rows={snapshot?.scenarios ?? []} compact />
           </Panel>
         </div>
       </main>

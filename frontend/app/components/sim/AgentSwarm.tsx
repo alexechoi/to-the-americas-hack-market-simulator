@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ARCHETYPES } from "@/app/lib/sim/archetypes";
 import type { Agent, AgentArchetype, AgentDecision } from "@/app/lib/sim/types";
@@ -12,21 +12,25 @@ interface AgentSwarmProps {
 }
 
 /**
- * Each agent is a fixed point on a force-arranged honeycomb. When an agent
- * makes a decision, the dot pulses in its side colour and a thin orbit ring
- * appears for ~700ms. Cohorts are arranged into clusters left-to-right by
- * reaction speed, so faster agents cluster on the left.
+ * Each agent is a fixed point on a honeycomb-packed grid, clustered by
+ * reaction-speed tier. When an agent acts, the dot pulses in its side colour
+ * and an orbit ring appears for ~800ms. Layout is resize-aware so the swarm
+ * fills its container in tall, wide, or square panels.
  */
 export function AgentSwarm({
   agents,
   decisions,
-  height = 320,
+  height = 240,
 }: AgentSwarmProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dprRef = useRef(1);
+  const [size, setSize] = useState({ w: 600, h: height });
 
-  const layout = useMemo(() => layoutAgents(agents), [agents]);
+  const layout = useMemo(
+    () => layoutAgents(agents, size.w, size.h),
+    [agents, size.w, size.h],
+  );
 
   // map of agentId → most recent decision timestamp (for pulse)
   const lastByAgent = useMemo(() => {
@@ -46,10 +50,13 @@ export function AgentSwarm({
     dprRef.current = dpr;
     const resize = () => {
       const rect = container.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
+      const w = Math.max(1, Math.round(rect.width));
+      const h = Math.max(1, Math.round(rect.height));
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -150,11 +157,14 @@ interface SwarmCluster {
   count: number;
 }
 
-function layoutAgents(agents: Agent[]): {
+function layoutAgents(
+  agents: Agent[],
+  containerW: number,
+  containerH: number,
+): {
   nodes: SwarmNode[];
   clusters: SwarmCluster[];
 } {
-  // Cohort grouping by latency tier
   const tiers: { label: string; archetypes: AgentArchetype[] }[] = [
     { label: "Algo · sub-second", archetypes: ["hft", "gamma"] },
     { label: "Mechanical · seconds", archetypes: ["cta"] },
@@ -165,55 +175,91 @@ function layoutAgents(agents: Agent[]): {
     { label: "Retail · slow", archetypes: ["retail"] },
   ];
 
-  const containerW = 600;
-  const containerH = 320;
-  const gutter = 14;
-  const colCount = tiers.length;
-  const colW = (containerW - gutter * (colCount + 1)) / colCount;
+  const gutter = 12;
+  // In tall/narrow panels stack tiers as rows; in wide panels split as columns.
+  const stackVertical = containerH / Math.max(1, containerW) > 0.85;
 
   const clusters: SwarmCluster[] = [];
   const nodes: SwarmNode[] = [];
 
-  tiers.forEach((tier, ti) => {
-    const tierAgents = agents.filter((a) =>
-      tier.archetypes.includes(a.archetype),
-    );
-    const colX = gutter + ti * (colW + gutter);
-    const colY = 8;
-    const colH = containerH - 16;
-    clusters.push({
-      label: tier.label,
-      archetype: tier.archetypes[0],
-      x: colX,
-      y: colY,
-      w: colW,
-      h: colH,
-      count: tierAgents.length,
+  if (stackVertical) {
+    const rowH = (containerH - gutter * (tiers.length + 1)) / tiers.length;
+    tiers.forEach((tier, ti) => {
+      const tierAgents = agents.filter((a) =>
+        tier.archetypes.includes(a.archetype),
+      );
+      const x = gutter;
+      const y = gutter + ti * (rowH + gutter);
+      const w = containerW - gutter * 2;
+      const h = rowH;
+      clusters.push({
+        label: tier.label,
+        archetype: tier.archetypes[0],
+        x,
+        y,
+        w,
+        h,
+        count: tierAgents.length,
+      });
+      packIntoCluster(tierAgents, nodes, x, y, w, h);
     });
-
-    // Honeycomb pack inside the column
-    const innerX = colX + 14;
-    const innerY = colY + 28;
-    const innerW = colW - 28;
-    const innerH = colH - 36;
-    const cols = Math.max(
-      3,
-      Math.floor(Math.sqrt(tierAgents.length * (innerW / innerH))),
-    );
-    const rows = Math.ceil(tierAgents.length / cols);
-    const cellW = innerW / cols;
-    const cellH = innerH / rows;
-    tierAgents.forEach((agent, i) => {
-      const r = Math.floor(i / cols);
-      const c = i % cols;
-      const offset = r % 2 === 0 ? 0 : cellW / 2;
-      const x = innerX + c * cellW + cellW / 2 + offset;
-      const y = innerY + r * cellH + cellH / 2;
-      nodes.push({ agent, x, y });
+  } else {
+    const colW = (containerW - gutter * (tiers.length + 1)) / tiers.length;
+    tiers.forEach((tier, ti) => {
+      const tierAgents = agents.filter((a) =>
+        tier.archetypes.includes(a.archetype),
+      );
+      const x = gutter + ti * (colW + gutter);
+      const y = gutter;
+      const w = colW;
+      const h = containerH - gutter * 2;
+      clusters.push({
+        label: tier.label,
+        archetype: tier.archetypes[0],
+        x,
+        y,
+        w,
+        h,
+        count: tierAgents.length,
+      });
+      packIntoCluster(tierAgents, nodes, x, y, w, h);
     });
-  });
+  }
 
   return { nodes, clusters };
+}
+
+function packIntoCluster(
+  tierAgents: Agent[],
+  nodes: SwarmNode[],
+  cx: number,
+  cy: number,
+  cw: number,
+  ch: number,
+) {
+  const padX = 14;
+  const padTop = 28;
+  const padBottom = 12;
+  const innerX = cx + padX;
+  const innerY = cy + padTop;
+  const innerW = Math.max(1, cw - padX * 2);
+  const innerH = Math.max(1, ch - padTop - padBottom);
+  if (tierAgents.length === 0) return;
+  const cols = Math.max(
+    1,
+    Math.round(Math.sqrt(tierAgents.length * (innerW / innerH))),
+  );
+  const rows = Math.ceil(tierAgents.length / cols);
+  const cellW = innerW / cols;
+  const cellH = innerH / rows;
+  tierAgents.forEach((agent, i) => {
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    const offset = r % 2 === 0 ? 0 : cellW / 2;
+    const x = innerX + c * cellW + cellW / 2 + offset;
+    const y = innerY + r * cellH + cellH / 2;
+    nodes.push({ agent, x, y });
+  });
 }
 
 function colourFor(arch: AgentArchetype): string {
