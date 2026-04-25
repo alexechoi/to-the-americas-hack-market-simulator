@@ -54,6 +54,23 @@ def test_pct_change_zero_when_no_fair_movement(exchange: Exchange, bus: NewsBus)
     assert len(views) == 1
     assert views[0].pct_change_since == pytest.approx(0.0)
     assert views[0].headline == "quiet news"
+    # A headline published in the same tick the snapshot is taken reads as 0s old.
+    assert views[0].seconds_ago == pytest.approx(0.0)
+
+
+def test_seconds_ago_grows_with_ticks(exchange: Exchange, bus: NewsBus):
+    """``seconds_ago`` is ``(current_tick - hl.tick_id) * SECONDS_PER_TICK``.
+
+    Guard against the renderer's ``[NEW]`` flag silently going stale because
+    we forgot to advance the tick anchor.
+    """
+    from news import SECONDS_PER_TICK
+
+    bus.publish(source="user", headline="anchor")
+    for _ in range(10):
+        exchange.tick()
+    [view] = build_news_view(bus, exchange)
+    assert view.seconds_ago == pytest.approx(10 * SECONDS_PER_TICK)
 
 
 def test_pct_change_reflects_move_since_anchor(exchange: Exchange, bus: NewsBus):

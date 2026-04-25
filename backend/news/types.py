@@ -11,6 +11,14 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Wall-clock period of a single exchange ``tick_id`` advance. Mirrors
+# ``runtime.UI_TICK_PERIOD_S`` — defined here (alongside the ``tick_id`` schema)
+# so consumers like ``agents.observation`` can convert ``tick_id`` deltas to
+# seconds without importing the runtime module (which would create a cycle:
+# runtime → agents.schemas → news → runtime). ``runtime.py`` imports it back
+# from here so the two never drift.
+SECONDS_PER_TICK: float = 0.2
+
 
 class NewsHeadline(BaseModel):
     """A headline injected into the simulation.

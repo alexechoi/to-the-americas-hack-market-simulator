@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 from agents import default_roster  # noqa: E402
+from agents.memory import memory as agent_memory  # noqa: E402
 from auth import FirebaseUser, OptionalFirebaseUser  # noqa: E402
 from bootstrap import BootstrapError, bootstrap_from_yahoo  # noqa: E402
 from debug_api import router as debug_router  # noqa: E402
@@ -20,7 +21,7 @@ from firebase_service import auto_initialize  # noqa: E402
 from news_api import router as news_router  # noqa: E402
 from notifications import router as notifications_router  # noqa: E402
 from observability import configure_observability, instrument_app  # noqa: E402
-from runtime import runtime as exchange_runtime  # noqa: E402
+from runtime import make_sim_run_id, runtime as exchange_runtime  # noqa: E402
 from swarm import agent_swarm  # noqa: E402
 from yahoo_finance_api import router as yahoo_router  # noqa: E402
 
@@ -51,6 +52,11 @@ async def lifespan(_app: FastAPI):
            no seed news) so the backend always boots.
         4. Start the exchange tick loop and the swarm task fleet.
     """
+    # Initialise the MuBit memory layer once per process. Idempotent and a
+    # no-op when MUBIT_API_KEY is unset, so local dev without credentials
+    # still boots cleanly. The active run_id is set inside ``respawn`` below.
+    agent_memory.configure()
+
     # Register personas first so `runtime.respawn` can re-register them on the
     # fresh exchange instance it creates.
     for persona in default_roster():
@@ -72,6 +78,9 @@ async def lifespan(_app: FastAPI):
             bootstrap_ticker,
             exc,
         )
+        # Respawn would have set the MuBit run_id; do it manually here so
+        # cold-start traders still write to memory under a real run.
+        agent_memory.set_run_id(make_sim_run_id(exchange_runtime.ticker))
 
     exchange_runtime.start()
     agent_swarm.start()

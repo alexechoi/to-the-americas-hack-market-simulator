@@ -25,16 +25,20 @@ from collections import deque
 from typing import Any, AsyncIterator, Iterable
 from uuid import uuid4
 
+from agents.memory import memory
 from agents.schemas import TraderDecision, TraderPersona
 from bootstrap import BootstrapPayload
 from exchange import Exchange, MMParams
 from exchange.types import Order, Snapshot
-from news import NewsBus
+from news import SECONDS_PER_TICK, NewsBus
 
 logger = logging.getLogger(__name__)
 
 # Cadence configuration — keep here so it's tweakable in one place.
-UI_TICK_PERIOD_S = 0.2  # 5 Hz salt re-roll / breathing
+# Re-export the canonical tick period (defined in ``news.types`` so
+# ``agents.observation`` can convert ``tick_id`` deltas to seconds without
+# importing this module).
+UI_TICK_PERIOD_S = SECONDS_PER_TICK  # 5 Hz salt re-roll / breathing
 EVENT_TICK_EVERY = 5  # every Nth UI tick advances an event tick (=> 1 Hz event ticks)
 
 # How many recent order-log entries to retain for late SSE joiners. Bigger means
@@ -305,6 +309,16 @@ class ExchangeRuntime:
         self.fetched_at = payload.fetched_at
         self._order_log.clear()
 
+        # Rotate the MuBit run so memories from the previous ticker don't bleed
+        # into this one. Per-simulation isolation: every respawn starts fresh
+        # while reusing the same persona agent_ids across runs. No-op when
+        # MuBit is disabled.
+        memory.set_run_id(make_sim_run_id(payload.ticker))
+
+        # Re-register personas so their accounts carry forward with their
+        # configured initial_cash (rather than auto-registering at $0 on the
+        # first observe()).
+
         for persona in persona_list:
             self.exchange.register(persona.agent_id)
 
@@ -349,6 +363,20 @@ class ExchangeRuntime:
         except Exception:
             logger.exception("Exchange tick loop crashed")
             raise
+
+
+def make_sim_run_id(ticker: str) -> str:
+    """Build a unique MuBit run id for a single simulation.
+
+    Format: ``sim-<ticker>-<unix-seconds>``. Ticker is upper-cased for
+    consistency; unix seconds give a monotonic suffix so two respawns of
+    the same ticker still scope into separate memory runs.
+
+    Public so the FastAPI lifespan can mint a run_id for the cold-start
+    fallback (when bootstrap fails before ``respawn`` would have done it).
+    """
+    safe_ticker = "".join(c if c.isalnum() else "_" for c in ticker.strip().upper())
+    return f"sim-{safe_ticker or 'UNKNOWN'}-{int(time.time())}"
 
 
 # Module-level singleton — single shared simulation per backend process.

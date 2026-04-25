@@ -35,7 +35,9 @@ from agents import (
     TraderPersona,
     build_trader_agent,
     build_trader_context,
+    fresh_window_s,
 )
+from agents.memory import memory
 from exchange.types import Order
 from runtime import runtime as exchange_runtime
 
@@ -180,13 +182,60 @@ class AgentSwarmRuntime:
 
     async def _one_turn(self, agent, persona: TraderPersona) -> None:
         with logfire.span("agent_turn", agent_id=persona.agent_id):
+            # Pull a token-budgeted memory block BEFORE building the LLM
+            # context so it can be spliced in as a top-of-prompt frame. The
+            # recall is bounded (~1s); when MuBit is disabled or the call
+            # times out, this returns "" and we proceed without prior memory.
+            memory_query = _memory_query(persona)
+            memory_block = await memory.recall_context(
+                persona=persona, query=memory_query
+            )
             ctx = build_trader_context(
                 persona=persona,
                 exchange=exchange_runtime.exchange,
                 news_bus=exchange_runtime.news_bus,
+                memory=memory_block,
+            )
+            # Record exactly which headlines this agent saw and how many of
+            # them count as [NEW] for this persona. If agents stop reacting
+            # to a headline you injected, this log line lets you confirm
+            # whether the headline was even in the prompt — the Logfire
+            # bridge JSON-serialises the kwargs into queryable span attrs.
+            window_s = fresh_window_s(persona)
+            fresh_count = sum(1 for n in ctx.news if n.seconds_ago < window_s)
+            logger.info(
+                "agent_turn_inputs",
+                extra={
+                    "agent_id": persona.agent_id,
+                    "news_total": len(ctx.news),
+                    "news_fresh": fresh_count,
+                    "memory_chars": len(memory_block),
+                    "news_headlines": [
+                        {
+                            "headline": n.headline[:120],
+                            "source": n.source,
+                            "seconds_ago": round(n.seconds_ago, 2),
+                            "pct_change_since": round(n.pct_change_since, 4),
+                            "fresh": n.seconds_ago < window_s,
+                        }
+                        for n in ctx.news
+                    ],
+                },
             )
             result = await agent.run(TURN_PROMPT, deps=ctx)
             decision: TraderDecision = result.output
+            logger.info(
+                "agent_turn_decision agent_id=%s action=%s qty=%d conf=%.2f news_fresh=%d",
+                persona.agent_id,
+                decision.action.value,
+                decision.quantity,
+                decision.confidence,
+                fresh_count,
+            )
+            # Persist the decision to memory BEFORE broadcasting/submitting so
+            # a slow MuBit call can't block the order path. Fire-and-forget —
+            # the call returns immediately and runs in the background.
+            memory.remember_decision_async(persona=persona, decision=decision, ctx=ctx)
             # Broadcast every decision (including HOLDs) to the order-log SSE
             # stream. This is the single source of truth for the UI panel —
             # killed orders are also represented here as their original decision.
@@ -201,6 +250,17 @@ class AgentSwarmRuntime:
                     qty=qty,
                 )
             )
+
+
+def _memory_query(persona: TraderPersona) -> str:
+    """The recall query used per turn — kept stable per persona so MuBit's
+    embedding-side cache can hit. Persona name + horizon nudges retrieval
+    toward this trader's own past reasoning + recent shared headlines."""
+    return (
+        f"What lessons and recent events should {persona.display_name} "
+        f"({persona.archetype.value}, {persona.time_horizon.value}) consider "
+        f"for the next decision?"
+    )
 
 
 # Module-level singleton — single shared swarm per backend process.

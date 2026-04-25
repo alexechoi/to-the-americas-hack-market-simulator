@@ -129,6 +129,48 @@ Examples:
 
 To switch models: set `LLM_MODEL` in `backend/.env`. **No code change.**
 
+## 4a. Memory is centralised — use `agents.memory.memory`
+
+Trader agents are otherwise stateless (no `message_history` between turns).
+Durable memory across turns + simulations lives in `backend/agents/memory.py`,
+backed by [MuBit](https://docs.mubit.ai). The module exports a single
+process-wide `memory` singleton — never instantiate `mubit.Client` yourself.
+
+What it does on every agent turn:
+
+- **Recall** (before LLM call) — `await memory.recall_context(persona=..., query=...)`
+  pulls a token-budgeted block of relevant lessons + recent activity for that
+  persona. Bounded by a ~1s timeout so a slow MuBit call can't stall the loop.
+  The recalled string flows through `TraderContext.memory` and is rendered
+  above the news block in the prompt by `_runtime_block` (see `agents/llm.py`).
+- **Remember decision** (after LLM call) — `memory.remember_decision_async(persona=..., decision=..., ctx=...)`
+  fires-and-forgets a one-line summary plus structured metadata. Tagged
+  `agent_id=persona.agent_id` so future recalls scope to that trader's lane.
+- **Remember headline** — `news/bus.py` calls `memory.remember_headline_async(...)`
+  on every `publish` so headlines survive past the in-process recent buffer.
+  Tagged `agent_id="news-bus"` (shared, not attributed to one persona).
+
+Lifecycle:
+
+- `agent_memory.configure()` is called once from `main.lifespan` (idempotent).
+- `memory.set_run_id(...)` is called from `runtime.respawn` with
+  `make_sim_run_id(ticker)` so each simulation gets its own MuBit run and
+  prior-ticker memory doesn't bleed into the new one.
+- When `MUBIT_API_KEY` is missing, every method short-circuits to a no-op —
+  the simulation runs unchanged. Same pattern as `LOGFIRE_TOKEN`.
+
+Config:
+
+```bash
+# backend/.env
+MUBIT_API_KEY=mbt_...   # required to enable memory; leave blank to disable
+MUBIT_PROJECT_ID=proj-... # informational; the API key already scopes the project
+```
+
+Do **not** call `client.remember`, `client.recall`, or `client.get_context`
+directly from feature code — go through the `memory` facade so the no-op
+fallback, error logging, run_id rotation, and async semantics stay consistent.
+
 ## 5. Engine vs schema boundary
 
 - `backend/exchange/` uses `@dataclass(frozen=True)` types for hot-path performance.
