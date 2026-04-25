@@ -74,30 +74,56 @@ When wiring a new pydantic-ai agent, use the existing schemas — do not redefin
   qty via `decision.to_signed_qty()` at the boundary, then submit via `Order(...)`.
 - `NewsHeadline`, `MarketContextView`, `AccountView` — supporting views.
 
-Skeleton for adding a real agent (do this, not a custom variant):
+## 4. Inference is centralised — use `agents.build_trader_agent`
+
+**Never instantiate `pydantic_ai.Agent` or any `*Model` class directly.** All trader
+inference goes through `backend/agents/llm.py`, which gives you:
+
+- One Agent instance per model string (cached) — Pydantic-AI schema warm-up doesn't
+  re-run on every turn (matters when 100 agents tick fast).
+- Persona personality auto-injected via dynamic `@agent.instructions` from
+  `RunContext[TraderContext]` — your call site never builds a system prompt.
+- Provider swap from one place: change `LLM_MODEL` in `.env`, no code change.
+- Logfire tracing for free (already wired in `observability.configure_observability`).
+
+Canonical usage:
 
 ```python
 import logfire
-from pydantic_ai import Agent
 
-from agents import TraderContext, TraderDecision
+from agents import build_trader_agent, TraderContext
 
-trader_agent = Agent(
-    "anthropic/claude-sonnet-4.6",  # routes through Vercel AI Gateway
-    deps_type=TraderContext,
-    output_type=TraderDecision,
-    instructions="...",
-)
+agent = build_trader_agent()  # uses LLM_MODEL env var (default: groq:llama-3.3-70b-versatile)
 
 with logfire.span("trader_turn", agent_id=ctx.persona.agent_id):
-    result = await trader_agent.run("What do you do?", deps=ctx)
-    decision: TraderDecision = result.output
+    result = await agent.run("Decide your next action.", deps=ctx)
+    decision = result.output  # already a validated TraderDecision
+
+ex.submit(Order(agent_id=ctx.persona.agent_id, qty=decision.to_signed_qty(), limit=decision.limit_price))
 ```
 
-`instrument_pydantic_ai()` is already configured, so every `agent.run(...)` call is
-traced (messages, tool calls, latency, token usage).
+Per-persona model override (use sparingly — keeps the cache small):
 
-## 4. Engine vs schema boundary
+```python
+hero_agent = build_trader_agent(model="anthropic:claude-sonnet-4-6")
+```
+
+### Provider env vars
+
+Each provider expects its own API key in `backend/.env`. Pydantic-AI picks them up
+automatically — `agents/llm.py` does not hand them to the provider:
+
+| `LLM_MODEL` prefix | Required env var |
+|---|---|
+| `groq:...`        | `GROQ_API_KEY`        |
+| `anthropic:...`   | `ANTHROPIC_API_KEY`   |
+| `openai:...`      | `OPENAI_API_KEY`      |
+| `google-gla:...`  | `GEMINI_API_KEY`      |
+
+To add a new provider: install the extra (`uv add 'pydantic-ai-slim[<provider>]'`),
+add the env var to `.env`, set `LLM_MODEL=<provider>:<model>`. **No code change.**
+
+## 5. Engine vs schema boundary
 
 - `backend/exchange/` uses `@dataclass(frozen=True)` types for hot-path performance.
   Keep them that way — do not convert them to pydantic models.
@@ -107,7 +133,7 @@ traced (messages, tool calls, latency, token usage).
   the engine.
 - `backend/exchange_api.py` uses pydantic for HTTP request bodies only.
 
-## 5. Dependencies — use `uv add`, never edit `pyproject.toml` directly
+## 6. Dependencies — use `uv add`, never edit `pyproject.toml` directly
 
 ```bash
 cd backend
@@ -117,7 +143,7 @@ uv add --dev some-package     # dev/test dep
 
 This keeps `uv.lock` in sync. Do not paste a version string into `pyproject.toml`.
 
-## 6. Lint + format before declaring done
+## 7. Lint + format before declaring done
 
 ```bash
 cd backend
