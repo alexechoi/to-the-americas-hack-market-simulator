@@ -14,7 +14,7 @@ terraform {
     }
     vercel = {
       source  = "vercel/vercel"
-      version = ">= 1.0.0"
+      version = "~> 5.0"
     }
     netlify = {
       source  = "netlify/netlify"
