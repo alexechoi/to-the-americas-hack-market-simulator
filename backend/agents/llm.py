@@ -128,6 +128,60 @@ def _persona_block(persona: TraderPersona) -> str:
     return "\n".join(parts)
 
 
+def _runtime_block(ctx: TraderContext) -> str:
+    """Render the live market / account / news state into the system prompt.
+
+    Pydantic-AI does not auto-serialize ``deps`` into the LLM prompt — they are
+    only accessible from tools and ``@instructions`` decorators. Without this
+    block the model would never see best_bid / best_ask / fair / ladder and
+    would hallucinate price levels (typically near round numbers like 100).
+    """
+    market = ctx.market
+    account = ctx.account
+    news = ctx.news
+
+    bid_lines = (
+        "\n".join(f"  {lvl.price:.4f} x {lvl.size}" for lvl in market.bids[:5])
+        or "  (empty)"
+    )
+    ask_lines = (
+        "\n".join(f"  {lvl.price:.4f} x {lvl.size}" for lvl in market.asks[:5])
+        or "  (empty)"
+    )
+    if market.recent_trades:
+        prints = "\n".join(
+            f"  {p.agent_id} {'BUY' if p.qty > 0 else 'SELL'} {abs(p.qty)} @ {p.vwap:.4f}"
+            for p in market.recent_trades[-5:]
+        )
+    else:
+        prints = "  (none yet)"
+
+    if news:
+        news_lines = "\n".join(
+            f"  [{i}] {n.source}: {n.headline} (fair {n.pct_change_since:+.2f}% since)"
+            for i, n in enumerate(news, start=1)
+        )
+    else:
+        news_lines = "  (no recent headlines)"
+
+    return (
+        f"=== Market State (tick {market.tick_id}, event_tick {market.event_tick}) ===\n"
+        f"fair: {market.fair:.4f}\n"
+        f"best_bid: {market.best_bid:.4f}\n"
+        f"best_ask: {market.best_ask:.4f}\n\n"
+        f"Top bids (price x size):\n{bid_lines}\n\n"
+        f"Top asks (price x size):\n{ask_lines}\n\n"
+        f"Recent prints (newest last):\n{prints}\n\n"
+        f"=== Your Account ===\n"
+        f"agent_id: {account.agent_id}\n"
+        f"inventory: {account.inventory}\n"
+        f"n_fills: {account.n_fills}\n\n"
+        f"=== Recent News ===\n{news_lines}\n\n"
+        f"REMINDER: copy market.best_ask into limit_price for buy, market.best_bid "
+        f"into limit_price for sell. Do not invent a price."
+    )
+
+
 @lru_cache(maxsize=8)
 def _trader_agent_for_model(model: str) -> TraderAgent:
     """One shared Agent per model — persona is injected via deps at run time."""
@@ -142,6 +196,10 @@ def _trader_agent_for_model(model: str) -> TraderAgent:
     @agent.instructions
     def _persona_instructions(ctx: RunContext[TraderContext]) -> str:
         return _persona_block(ctx.deps.persona)
+
+    @agent.instructions
+    def _runtime_instructions(ctx: RunContext[TraderContext]) -> str:
+        return _runtime_block(ctx.deps)
 
     return agent
 
