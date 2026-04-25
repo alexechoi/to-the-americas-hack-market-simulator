@@ -283,9 +283,8 @@ class ExchangeRuntime:
         Steps, in order:
             1. Cancel the tick task (if running) so no fills sneak in mid-swap.
             2. Construct a fresh ``Exchange`` + ``NewsBus`` at the new fair.
-            3. Re-register every persona on the new exchange so their
-               ``initial_cash`` is preserved (the swarm holds personas; the
-               caller passes them in to keep this module swarm-agnostic).
+            3. Re-register every persona on the new exchange (the swarm holds
+               personas; the caller passes them in to keep this module swarm-agnostic).
             4. Publish each seed headline (anchored at ``tick_id=0``).
             5. Clear the rolling order-log — old decisions belong to the old
                universe and would mislead the UI tape after the swap.
@@ -306,11 +305,8 @@ class ExchangeRuntime:
         self.fetched_at = payload.fetched_at
         self._order_log.clear()
 
-        # Re-register personas so their accounts carry forward with their
-        # configured initial_cash (rather than auto-registering at $0 on the
-        # first observe()).
         for persona in persona_list:
-            self.exchange.register(persona.agent_id, initial_cash=persona.initial_cash)
+            self.exchange.register(persona.agent_id)
 
         for hl in payload.seed_news:
             # Anchored at tick_id=0 already in the payload, but the bus stamps

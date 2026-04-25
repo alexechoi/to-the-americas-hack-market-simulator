@@ -1,5 +1,5 @@
 /**
- * Display metadata for the seven backend trader archetypes.
+ * Display metadata for the six backend trader archetypes.
  *
  * The archetype string itself is the source of truth (mirrors backend
  * `TraderArchetype`). This module only adds presentation-layer details:
@@ -9,7 +9,6 @@
 
 export type Archetype =
   | "hft"
-  | "market_maker"
   | "quant"
   | "hedge_fund"
   | "tech_specialist"
@@ -27,7 +26,6 @@ export interface ArchetypeMeta {
 
 export const ARCHETYPE_META: Record<Archetype, ArchetypeMeta> = {
   hft: { shortLabel: "HFT", color: "#71717a", tier: "algo" },
-  market_maker: { shortLabel: "MM", color: "#a1a1aa", tier: "algo" },
   quant: { shortLabel: "QUANT", color: "#737373", tier: "mechanical" },
   hedge_fund: { shortLabel: "HF", color: "#9ca3af", tier: "discretionary" },
   tech_specialist: {

@@ -95,9 +95,9 @@ export interface ExchangeState {
 /**
  * One registered persona in the backend swarm — returned by GET /exchange/agents.
  *
- * Archetype strings mirror backend `TraderArchetype` (hft, market_maker, quant,
- * hedge_fund, pension_fund, tech_specialist, retail). The frontend uses them to
- * group dots into cohort tiers on the swarm panel and to colour order-log rows.
+ * Archetype strings mirror backend `TraderArchetype` (hft, quant, hedge_fund,
+ * pension_fund, tech_specialist, retail). The frontend uses them to group dots
+ * into cohort tiers on the swarm panel and to colour order-log rows.
  */
 export interface BackendAgent {
   agent_id: string;

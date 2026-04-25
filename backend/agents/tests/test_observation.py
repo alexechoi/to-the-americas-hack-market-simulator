@@ -39,7 +39,6 @@ def persona() -> TraderPersona:
         archetype=TraderArchetype.RETAIL,
         risk_tolerance=RiskTolerance.MODERATE,
         time_horizon=TimeHorizon.SHORT_TERM,
-        max_position=500,
         max_order_size=50,
         backstory="Synthetic test persona.",
     )

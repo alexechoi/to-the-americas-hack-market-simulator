@@ -22,17 +22,13 @@ from news import NewsHeadline
 from runtime import ExchangeRuntime
 
 
-def _persona(
-    agent_id: str = "test-1", initial_cash: float = 250_000.0
-) -> TraderPersona:
+def _persona(agent_id: str = "test-1") -> TraderPersona:
     return TraderPersona(
         agent_id=agent_id,
         display_name="Tester",
         archetype=TraderArchetype.RETAIL,
         risk_tolerance=RiskTolerance.MODERATE,
         time_horizon=TimeHorizon.SHORT_TERM,
-        initial_cash=initial_cash,
-        max_position=500,
         max_order_size=50,
         backstory="Synthetic test persona.",
     )
@@ -67,14 +63,14 @@ async def test_respawn_swaps_exchange_and_news_bus():
     assert rt.exchange.state.fair == pytest.approx(200.0)
 
 
-async def test_respawn_reregisters_personas_with_initial_cash():
+async def test_respawn_reregisters_personas():
     rt = ExchangeRuntime()
-    p = _persona(agent_id="hf-01", initial_cash=750_000.0)
+    p = _persona(agent_id="hf-01")
 
     await rt.respawn(_payload(), personas=[p])
 
     snapshot = rt.exchange.account("hf-01")
-    assert snapshot.cash == pytest.approx(750_000.0)
+    assert snapshot.agent_id == "hf-01"
 
 
 async def test_respawn_publishes_seed_news_anchored_at_zero():

@@ -42,9 +42,6 @@ class TraderArchetype(StrEnum):
     RETAIL = "retail"
     HEDGE_FUND = "hedge_fund"
     PENSION_FUND = "pension_fund"
-    TECH_SPECIALIST = "tech_specialist"
-    QUANT = "quant"
-    MARKET_MAKER = "market_maker"
 
 
 class RiskTolerance(StrEnum):
@@ -79,9 +76,7 @@ class TraderPersona(BaseModel):
         gt=0.0,
         description="Cadence of this agent's decision loop. HFTs tick faster than retail.",
     )
-    max_position: int = Field(default=1000, gt=0)
     max_order_size: int = Field(default=100, gt=0)
-    initial_cash: float = Field(default=100_000.0, ge=0.0)
 
     backstory: str = Field(
         min_length=1,
@@ -93,12 +88,6 @@ class TraderPersona(BaseModel):
         max_length=2_000,
         description="Optional additional steering on top of the archetype default.",
     )
-
-    @model_validator(mode="after")
-    def _max_order_within_position(self) -> Self:
-        if self.max_order_size > self.max_position:
-            raise ValueError("max_order_size cannot exceed max_position")
-        return self
 
 
 class SpawnConfig(BaseModel):
@@ -193,9 +182,8 @@ class AccountView(BaseModel):
     """The agent's own private ledger view.
 
     Intentionally omits cash / equity — agents don't see how much capital they have.
-    Position-sizing is bounded by the persona's `max_order_size` and `max_position`,
-    not by a dollar budget on the LLM side. The exchange still tracks cash/equity
-    on `AccountSnapshot` for accounting + the HTTP API.
+    Position-sizing is bounded by the persona's `max_order_size`.
+    The exchange still tracks cash/equity on `AccountSnapshot` for accounting + the HTTP API.
     """
 
     model_config = ConfigDict(frozen=True)
