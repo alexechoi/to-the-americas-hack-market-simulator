@@ -6,26 +6,15 @@ const SECTIONS = [
   {
     title: "Product",
     links: [
-      { label: "Simulator", href: "/sim" },
-      { label: "Scenarios", href: "/sim#scenarios" },
-      { label: "Personas", href: "/#personas" },
-      { label: "API", href: "/#api" },
-    ],
-  },
-  {
-    title: "Research",
-    links: [
-      { label: "Methodology", href: "/#research" },
-      { label: "Backtests", href: "/#backtests" },
-      { label: "Whitepaper", href: "/#paper" },
+      { label: "Simulator", href: "/sim" }
     ],
   },
   {
     title: "Company",
     links: [
-      { label: "Built at Unicorn Mafia, London", href: "#" },
-      { label: "GitHub", href: "#" },
-      { label: "Contact", href: "#" },
+      { label: "Built at Unicorn Mafia, London", href: "https://unicornmafia.ai" },
+      { label: "GitHub", href: "https://github.com/alexechoi/to-the-americas-hack-market-simulator" },
+      { label: "Contact", href: "https://clawforall.app" },
     ],
   },
 ];
@@ -47,10 +36,6 @@ export function Footer() {
               who got tired of social-feed simulations pretending to model
               markets.
             </p>
-            <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-up)] animate-live" />
-              Engine online · 124 agents · NVDA
-            </div>
           </div>
           {SECTIONS.map((section) => (
             <div key={section.title} className="flex flex-col gap-3">
