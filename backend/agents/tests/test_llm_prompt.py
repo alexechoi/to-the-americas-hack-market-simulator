@@ -69,6 +69,7 @@ def _ctx(
     best_bid: float = 207.77,
     best_ask: float = 208.83,
     news: list[NewsView] | None = None,
+    memory: str = "",
 ) -> TraderContext:
     if news is None:
         # Default: a single STALE headline (10s ago, persona tick=1.0s ⇒ fresh
@@ -86,6 +87,7 @@ def _ctx(
         market=_market(fair=fair, best_bid=best_bid, best_ask=best_ask),
         account=_account(),
         news=news,
+        memory=memory,
     )
 
 
