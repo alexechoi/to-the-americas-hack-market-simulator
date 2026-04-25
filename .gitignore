@@ -1,2 +1,5 @@
 # Local Netlify folder
 .netlify
+
+# Local Claude Code per-machine settings
+.claude/
