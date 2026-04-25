@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { AgentReasoning } from "@/app/components/sim/AgentReasoning";
 import { AgentSwarm } from "@/app/components/sim/AgentSwarm";
 import { HeadlineInjector } from "@/app/components/sim/HeadlineInjector";
-import { NewsFeed } from "@/app/components/sim/NewsFeed";
 import { OrderTape } from "@/app/components/sim/OrderTape";
 import { PriceChart } from "@/app/components/sim/PriceChart";
 import { ScenarioTable } from "@/app/components/sim/ScenarioTable";
@@ -180,20 +179,10 @@ export default function SimPage() {
           </Panel>
         </div>
 
-        {/* Right column · inject + news + reasoning + scenarios */}
+        {/* Right column · inject + reasoning + scenarios */}
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
           <Panel title="Inject headline" caption="⌘↵" className="shrink-0">
             <HeadlineInjector onInject={controls.injectHeadline} />
-          </Panel>
-
-          <Panel
-            title="News tape"
-            caption={`${cohortStats.news} headlines`}
-            flush
-            className="min-h-0 flex-1"
-            bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
-          >
-            <NewsFeed news={snapshot?.news ?? []} />
           </Panel>
 
           <Panel
