@@ -28,7 +28,7 @@ export function Hero() {
       // immediately on render and we want it to receive the new ticker on its
       // very first envelope rather than re-spawning mid-render.
       await spawnExchange(symbol);
-      router.push("/sim");
+      router.push(`/sim/${symbol}`);
     } catch (err) {
       console.error("spawnExchange failed", err);
       setError(err instanceof Error ? err.message : "Failed to spawn ticker");

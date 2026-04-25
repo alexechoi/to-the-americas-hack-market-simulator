@@ -6,7 +6,7 @@ const SECTIONS = [
   {
     title: "Product",
     links: [
-      { label: "Simulator", href: "/sim" }
+      { label: "Simulator", href: "/#ticker" }
     ],
   },
   {

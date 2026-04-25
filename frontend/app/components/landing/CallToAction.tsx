@@ -32,7 +32,7 @@ export function CallToAction() {
           className="mt-12 flex flex-col gap-4 sm:flex-row sm:items-center"
         >
           <Link
-            href="/sim"
+            href="/#ticker"
             className="group inline-flex h-12 items-center gap-2 bg-[var(--color-accent)] px-6 text-sm font-medium tracking-tight text-[var(--color-accent-ink)] transition-colors hover:bg-[#e6ff5e]"
           >
             Step onto the floor
@@ -44,7 +44,7 @@ export function CallToAction() {
             </span>
           </Link>
           <Link
-            href="/sim"
+            href="/#ticker"
             className="inline-flex h-12 items-center gap-2 border border-[var(--color-line-strong)] bg-transparent px-6 text-sm font-medium text-[var(--color-fg)] transition-colors hover:border-[var(--color-fg-faint)] hover:bg-[color-mix(in_oklab,var(--color-surface-2)_70%,transparent)]"
           >
             Inject a headline

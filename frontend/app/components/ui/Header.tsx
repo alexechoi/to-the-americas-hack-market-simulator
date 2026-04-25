@@ -18,7 +18,7 @@ export function Header() {
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-[var(--color-fg-muted)] md:flex">
             <Link
-              href="/sim"
+              href="/#ticker"
               className="transition-colors hover:text-[var(--color-fg)]"
             >
               Simulator
@@ -33,13 +33,13 @@ export function Header() {
         </div>
         <div className="flex items-center gap-3">
           <Link
-            href="/sim"
+            href="/#ticker"
             className="hidden h-9 items-center px-3 text-sm text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-fg)] md:inline-flex"
           >
             Open simulator
           </Link>
           <Link
-            href="/sim"
+            href="/#ticker"
             className="inline-flex h-9 items-center gap-1.5 bg-[var(--color-accent)] px-4 text-sm font-medium text-[var(--color-accent-ink)] transition-colors hover:bg-[#e6ff5e]"
           >
             Launch
