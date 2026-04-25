@@ -78,30 +78,33 @@ export function HeadlineInjector({ onInject }: HeadlineInjectorProps) {
           rows={2}
           className="block w-full resize-none bg-transparent px-3 py-2.5 text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-faint)] focus:outline-none"
         />
-        <div className="flex items-center justify-between gap-3 border-t border-[var(--color-line)] px-3 py-2">
-          <div className="flex flex-1 items-center gap-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
-              Sentiment
-            </span>
-            <input
-              type="range"
-              min={-1}
-              max={1}
-              step={0.05}
-              value={sentiment}
-              onChange={(e) => setSentiment(parseFloat(e.target.value))}
-              className="flex-1 accent-[var(--color-accent)]"
-              style={{ accentColor: "var(--color-accent)" }}
-            />
-            <span
-              className="w-12 text-right font-mono text-xs tabular-nums"
-              style={{ color: tone }}
-            >
-              {sentiment > 0 ? "+" : ""}
-              {sentiment.toFixed(2)}
-            </span>
-          </div>
-          <Button size="sm" onClick={submit} disabled={!title.trim()}>
+        <div className="flex items-center gap-2 border-t border-[var(--color-line)] px-3 py-2">
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)] md:inline">
+            Sentiment
+          </span>
+          <input
+            type="range"
+            min={-1}
+            max={1}
+            step={0.05}
+            value={sentiment}
+            onChange={(e) => setSentiment(parseFloat(e.target.value))}
+            className="min-w-0 flex-1 accent-[var(--color-accent)]"
+            style={{ accentColor: "var(--color-accent)" }}
+          />
+          <span
+            className="w-10 shrink-0 text-right font-mono text-xs tabular-nums"
+            style={{ color: tone }}
+          >
+            {sentiment > 0 ? "+" : ""}
+            {sentiment.toFixed(2)}
+          </span>
+          <Button
+            size="sm"
+            onClick={submit}
+            disabled={!title.trim()}
+            className="shrink-0"
+          >
             Inject
             <span aria-hidden>↵</span>
           </Button>
