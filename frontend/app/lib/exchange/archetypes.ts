@@ -1,5 +1,5 @@
 /**
- * Display metadata for the six backend trader archetypes.
+ * Display metadata for the four backend trader archetypes.
  *
  * The archetype string itself is the source of truth (mirrors backend
  * `TraderArchetype`). This module only adds presentation-layer details:
@@ -7,13 +7,7 @@
  * cohort tier so the swarm panel can group dots by reaction speed.
  */
 
-export type Archetype =
-  | "hft"
-  | "quant"
-  | "hedge_fund"
-  | "tech_specialist"
-  | "pension_fund"
-  | "retail";
+export type Archetype = "hft" | "hedge_fund" | "pension_fund" | "retail";
 
 export interface ArchetypeMeta {
   /** Short uppercase chip rendered in the order log. */
@@ -21,18 +15,12 @@ export interface ArchetypeMeta {
   /** Resting dot colour on the swarm canvas (overridden by side colour on pulse). */
   color: string;
   /** Speed cohort the agent belongs to — drives the swarm tier layout. */
-  tier: "algo" | "mechanical" | "discretionary" | "slow";
+  tier: "algo" | "discretionary" | "slow";
 }
 
 export const ARCHETYPE_META: Record<Archetype, ArchetypeMeta> = {
   hft: { shortLabel: "HFT", color: "#71717a", tier: "algo" },
-  quant: { shortLabel: "QUANT", color: "#737373", tier: "mechanical" },
   hedge_fund: { shortLabel: "HF", color: "#9ca3af", tier: "discretionary" },
-  tech_specialist: {
-    shortLabel: "TECH",
-    color: "#a3a3a3",
-    tier: "discretionary",
-  },
   pension_fund: { shortLabel: "PENSION", color: "#737373", tier: "slow" },
   retail: { shortLabel: "RETAIL", color: "#52525b", tier: "slow" },
 };
@@ -56,7 +44,6 @@ export function archetypeMeta(arch: string | null | undefined): ArchetypeMeta {
 /** Tier ordering + display label used by the swarm panel layout. */
 export const TIERS: { id: ArchetypeMeta["tier"]; label: string }[] = [
   { id: "algo", label: "Algo · sub-second" },
-  { id: "mechanical", label: "Mechanical · seconds" },
   { id: "discretionary", label: "Discretionary · minutes" },
   { id: "slow", label: "Slow · long-term" },
 ];

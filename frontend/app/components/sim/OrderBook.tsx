@@ -178,10 +178,7 @@ function Row({
       </span>
       <span className="relative text-right text-[var(--color-fg)]">
         $
-        {(level.price * level.size).toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}
+        {Math.round(level.price * level.size).toLocaleString()}
       </span>
     </div>
   );

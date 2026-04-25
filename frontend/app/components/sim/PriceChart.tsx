@@ -221,7 +221,7 @@ export function PriceChart({
       {/* corner overlay: ticker, last, change */}
       <div className="pointer-events-none absolute left-4 top-3 flex items-baseline gap-3">
         <span className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--color-fg-muted)]">
-          {ticker} · 1m · simulated
+          {ticker} · 1m
         </span>
         <span
           className="font-mono text-xs tabular-nums"
@@ -240,7 +240,7 @@ export function PriceChart({
             className="inline-block h-[2px] w-4"
             style={{ background: tone }}
           />
-          Simulated
+          Price
         </span>
         {realPath && (
           <span className="flex items-center gap-1.5">
