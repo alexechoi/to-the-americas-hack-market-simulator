@@ -1,6 +1,7 @@
 "use client";
 
 import { DebugTestCard } from "@/app/components/debug/DebugTestCard";
+import { DebugInferenceCard } from "@/app/components/debug/DebugInferenceCard";
 import { Footer } from "@/app/components/ui/Footer";
 import { Header } from "@/app/components/ui/Header";
 import { Tag } from "@/app/components/ui/Tag";
@@ -66,6 +67,8 @@ export default function DebugPage() {
             run={() => apiPost("/debug/inference", {})}
             successProbe={isOk}
           />
+
+          <DebugInferenceCard />
         </div>
       </main>
 
