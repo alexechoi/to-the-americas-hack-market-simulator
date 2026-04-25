@@ -7,30 +7,12 @@ import { WarpBackground } from "../ui/WarpBackground";
 import { AgentLattice } from "./AgentLattice";
 import { ReactionTape } from "./ReactionTape";
 
-const STAT_ROW = [
-  { k: "Agents online", v: "124" },
-  { k: "Cycles / sec", v: "3.6" },
-  { k: "Avg reflex", v: "182ms" },
-  { k: "Coverage", v: "11 markets" },
-];
-
 export function Hero() {
   return (
     <section className="relative isolate overflow-hidden">
       <WarpBackground intensity={0.62} speed={1.6} />
 
-      <div className="relative z-10 mx-auto flex min-h-[92vh] max-w-[1440px] flex-col px-6 pb-24 pt-16 md:px-10">
-        {/* eyebrow */}
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--color-fg-muted)]"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-up)] animate-live" />
-          Live · multi-agent market intelligence · v0.1
-        </motion.div>
-
+      <div className="relative z-10 mx-auto flex min-h-[92vh] max-w-[1440px] flex-col px-6 pb-24 md:px-10">
         {/* massive wordmark */}
         <div className="mt-10 grid grid-cols-1 items-end gap-10 lg:grid-cols-[1.55fr_1fr]">
           <div>
@@ -102,28 +84,6 @@ export function Hero() {
             <ReactionTape />
           </motion.div>
         </div>
-
-        {/* stat strip */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="mt-16 grid grid-cols-2 gap-px border border-[var(--color-line)] bg-[var(--color-line)] sm:grid-cols-4"
-        >
-          {STAT_ROW.map((s) => (
-            <div
-              key={s.k}
-              className="flex flex-col gap-1 bg-[var(--color-surface)] px-5 py-4"
-            >
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-fg-faint)]">
-                {s.k}
-              </span>
-              <span className="font-sans text-2xl font-semibold tracking-tight tabular-nums text-[var(--color-fg)]">
-                {s.v}
-              </span>
-            </div>
-          ))}
-        </motion.div>
       </div>
     </section>
   );
