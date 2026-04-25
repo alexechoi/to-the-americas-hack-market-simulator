@@ -251,7 +251,7 @@ function SubmitFOK({
 }) {
   const [side, setSide] = useState<Side>("buy");
   const [qty, setQty] = useState<number>(5);
-  const [limit, setLimit] = useState<number>(bestAsk);
+  const [limit, setLimit] = useState<number>(Math.ceil(bestAsk));
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -266,7 +266,7 @@ function SubmitFOK({
 
   const setSideAndLimit = (next: Side) => {
     setSide(next);
-    setLimit(next === "buy" ? bestAsk : bestBid);
+    setLimit(next === "buy" ? Math.ceil(bestAsk) : Math.floor(bestBid));
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -289,7 +289,7 @@ function SubmitFOK({
       }
       // Refill the limit with the latest best price so the user can fire
       // off another click without re-typing.
-      setLimit(side === "buy" ? bestAskRef.current : bestBidRef.current);
+      setLimit(side === "buy" ? Math.ceil(bestAskRef.current) : Math.floor(bestBidRef.current));
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "submit failed");
     } finally {
