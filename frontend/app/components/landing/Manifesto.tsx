@@ -6,7 +6,7 @@ const STATEMENTS = [
   {
     n: "01",
     title: "Every market is a population.",
-    body: "A price is the rolling vote of every actor in front of a screen. We give you the actors — by archetype, by reflex, by conviction — and watch them vote in real time.",
+    body: "A price is the rolling vote of every actor in front of a screen. We give you the actors - by archetype, by reflex, by conviction - and watch them vote in real time.",
   },
   {
     n: "02",
@@ -28,15 +28,6 @@ export function Manifesto() {
     >
       <div className="bg-grid pointer-events-none absolute inset-0 opacity-[0.18]" />
       <div className="relative mx-auto max-w-[1440px] px-6 py-28 md:px-10">
-        <motion.p
-          initial={{ opacity: 0, y: 6 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-          className="font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--color-fg-muted)]"
-        >
-          ◉ Manifesto · v0.1
-        </motion.p>
         <motion.h2
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
