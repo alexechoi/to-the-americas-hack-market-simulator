@@ -39,6 +39,19 @@ def get_snapshot():
     return _serialize_snapshot(runtime.exchange.snapshot())
 
 
+@router.get("/history")
+def get_history(since_tick: int | None = None) -> list[dict[str, Any]]:
+    """Price history — one point per fair mutation, keyed on exchange tick_id.
+
+    Intended for the frontend chart to hydrate on mount without replaying the full
+    SSE stream, and for agents / tools reasoning about `pct_change_since` anchors.
+    """
+    return [
+        {"tick_id": p.tick_id, "fair": p.fair}
+        for p in runtime.exchange.price_history(since_tick=since_tick)
+    ]
+
+
 @router.get("/account/{agent_id}")
 def get_account(agent_id: str):
     runtime.exchange.register(agent_id)

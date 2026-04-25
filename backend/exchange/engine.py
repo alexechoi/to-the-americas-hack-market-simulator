@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from bisect import bisect_right
 from collections import deque
 from dataclasses import replace
 
@@ -19,6 +20,7 @@ from .types import (
     MMState,
     Order,
     OrderResult,
+    PricePoint,
     Snapshot,
 )
 
@@ -38,6 +40,7 @@ class Exchange:
         initial_fair: float,
         session_seed: int = 0,
         recent_trades_cap: int = 200,
+        history_cap: int = 7_200,  # ~2h at 1 Hz event cadence
     ) -> None:
         self.params = replace(params, salt_seed=session_seed)
         self.state = MMState(fair=float(initial_fair))
@@ -46,6 +49,18 @@ class Exchange:
         self._pending: list[Order] = []
         self._accounts: dict[str, Account] = {}
         self._recent_trades: deque[Fill] = deque(maxlen=recent_trades_cap)
+        # Fills produced by the most recent tick(). Read by the runtime to emit
+        # one trade_log SSE event per fresh fill (vs. the rolling _recent_trades
+        # buffer that re-publishes old fills on every snapshot).
+        self.last_tick_fills: tuple[Fill, ...] = ()
+
+        # Price history — append-only list of PricePoints, one per fair mutation.
+        # We store as a list (not deque) so bisect_right can do O(log n) lookups;
+        # trimmed in bulk when we exceed cap to keep amortised append cheap.
+        self._history: list[PricePoint] = [
+            PricePoint(tick_id=0, fair=float(initial_fair))
+        ]
+        self._history_cap = history_cap
 
     # ------------------------------------------------------------------ registration / ledger
 
@@ -53,7 +68,9 @@ class Exchange:
         """Register an agent. Idempotent — re-registration does not reset state."""
         if agent_id not in self._accounts:
             self._accounts[agent_id] = Account(
-                agent_id=agent_id, cash=float(initial_cash), initial_cash=float(initial_cash),
+                agent_id=agent_id,
+                cash=float(initial_cash),
+                initial_cash=float(initial_cash),
             )
 
     def account(self, agent_id: str) -> AccountSnapshot:
@@ -106,19 +123,56 @@ class Exchange:
         Always increments `tick_id` (salt re-rolls, UI 'breathes').
         If `advance_event` and there are pending orders, processes them in a shuffled serial order,
         mutating MM fair and agent ledgers between fills.
+
+        Side-effect: ``self.last_tick_fills`` is rebuilt to hold only the fills
+        produced by *this* tick (in execution order), so the runtime can emit
+        one trade_log event per fresh fill without diffing the rolling buffer.
         """
         self._tick_id += 1
+        new_fills: list[Fill] = []
         if advance_event and self._pending:
             self._event_tick += 1
             orders = list(self._pending)
             self._pending.clear()
-            random.Random(f"shuffle:{self.params.salt_seed}:{self._event_tick}").shuffle(orders)
+            random.Random(
+                f"shuffle:{self.params.salt_seed}:{self._event_tick}"
+            ).shuffle(orders)
             for o in orders:
-                self._execute(o)
+                result = self._execute(o)
+                if isinstance(result, Fill):
+                    new_fills.append(result)
+        self.last_tick_fills = tuple(new_fills)
         return self._snapshot()
 
     def snapshot(self) -> Snapshot:
         return self._snapshot()
+
+    # ------------------------------------------------------------------ exchange time / price history
+
+    @property
+    def current_tick_id(self) -> int:
+        """Authoritative integer clock for news anchoring / replay."""
+        return self._tick_id
+
+    def price_at(self, tick_id: int) -> float | None:
+        """Fair at the given tick — i.e. the last recorded fair whose tick_id ≤ `tick_id`.
+
+        Used by news observation to compute `pct_change_since` relative to the
+        fair that was in effect when a headline dropped. Returns None only if
+        the history is empty (shouldn't happen — we seed at construction).
+        """
+        if not self._history:
+            return None
+        idx = bisect_right(self._history, tick_id, key=lambda p: p.tick_id) - 1
+        return self._history[idx].fair if idx >= 0 else None
+
+    def price_history(self, since_tick: int | None = None) -> tuple[PricePoint, ...]:
+        """Return price history, optionally sliced to `tick_id ≥ since_tick`."""
+        if since_tick is None:
+            return tuple(self._history)
+        # Bisect to find the cut — linear scan for tiny since values is fine.
+        cut = bisect_right(self._history, since_tick - 1, key=lambda p: p.tick_id)
+        return tuple(self._history[cut:])
 
     # ------------------------------------------------------------------ internals
 
@@ -170,10 +224,21 @@ class Exchange:
         # For sells, filled prices ≤ fair_pre ⇒ Δfair ≤ 0. At top-of-book this reduces to λ·qty.
         impact = sum(q * (p - fair_pre) for p, q in filled)
         self.state.fair += (self.params.kyle_lambda / hs_pre) * impact
+        self._record_price()
 
-        fill = Fill(agent_id=order.agent_id, qty=order.qty, vwap=vwap, levels=tuple(filled))
+        fill = Fill(
+            agent_id=order.agent_id, qty=order.qty, vwap=vwap, levels=tuple(filled)
+        )
         self._recent_trades.append(fill)
         return fill
+
+    def _record_price(self) -> None:
+        """Append a PricePoint at the current (tick_id, fair). Trim in bulk when over cap."""
+        self._history.append(PricePoint(tick_id=self._tick_id, fair=self.state.fair))
+        # Amortised bulk-trim: when we exceed cap, drop the oldest 10% in one slice.
+        if len(self._history) > self._history_cap:
+            trim = len(self._history) - int(self._history_cap * 0.9)
+            del self._history[:trim]
 
     def _snapshot(self) -> Snapshot:
         hs = half_spread(self.params)

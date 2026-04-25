@@ -14,6 +14,7 @@ from .types import (
     MMState,
     Order,
     OrderResult,
+    PricePoint,
     Snapshot,
 )
 
@@ -30,6 +31,7 @@ __all__ = [
     "MMState",
     "Order",
     "OrderResult",
+    "PricePoint",
     "Snapshot",
     "build_ladder",
     "half_spread",

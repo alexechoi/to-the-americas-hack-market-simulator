@@ -106,6 +106,19 @@ class Snapshot:
 
 
 @dataclass(frozen=True)
+class PricePoint:
+    """A single (tick_id, fair) sample recorded whenever fair changes.
+
+    The exchange's authoritative timeline is the integer `tick_id`. News headlines,
+    agent observations, and the frontend chart all anchor to this — no wall-clock
+    leaks into the simulation.
+    """
+
+    tick_id: int
+    fair: float
+
+
+@dataclass(frozen=True)
 class AgentObservation:
     """Canonical 'what this agent sees right now'. Feeds prompts / policies."""
 
