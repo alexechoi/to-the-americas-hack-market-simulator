@@ -29,17 +29,14 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field, ValidationError
 
 from agents import (
-    AccountView,
-    MarketContextView,
-    NewsHeadline,
     RiskTolerance,
     TimeHorizon,
     TraderAction,
     TraderArchetype,
-    TraderContext,
     TraderDecision,
     TraderPersona,
     build_trader_agent,
+    build_trader_context,
     default_model,
 )
 from agents.llm import _ensure_gateway_model
@@ -63,7 +60,9 @@ def ping() -> dict[str, Any]:
         "service": "market-sim-backend",
         "environment": os.getenv("ENVIRONMENT", "dev"),
         "llm_model": default_model(),
-        "pydantic_ai_gateway_key_present": bool(os.getenv("PYDANTIC_AI_GATEWAY_API_KEY")),
+        "pydantic_ai_gateway_key_present": bool(
+            os.getenv("PYDANTIC_AI_GATEWAY_API_KEY")
+        ),
         "logfire_token_present": bool(os.getenv("LOGFIRE_TOKEN")),
     }
 
@@ -159,19 +158,21 @@ class InferenceRequest(BaseModel):
 
 @router.post("/inference")
 async def debug_inference(req: InferenceRequest | None = None) -> dict[str, Any]:
-    """Run one real Agent turn and return the validated TraderDecision."""
+    """Run one real Agent turn and return the validated TraderDecision.
+
+    Publishes the headline through the real `news_bus` so the inference call sees
+    the same observation pipeline a live agent would: tick-anchored news + lazy
+    `pct_change_since` derived from price history.
+    """
     request = req or InferenceRequest()
     model = _ensure_gateway_model(request.model or default_model())
 
     persona = _sample_persona().model_copy(update={"archetype": request.archetype})
-    headline = NewsHeadline(source="debug", headline=request.headline)
-
-    observation = runtime.exchange.observe(persona.agent_id)
-    context = TraderContext(
+    published = runtime.news_bus.publish(source="debug", headline=request.headline)
+    context = build_trader_context(
         persona=persona,
-        market=MarketContextView.from_snapshot(observation.market),
-        account=AccountView.from_snapshot(observation.account),
-        news=[headline],
+        exchange=runtime.exchange,
+        news_bus=runtime.news_bus,
     )
 
     started = time.perf_counter()
@@ -197,7 +198,9 @@ async def debug_inference(req: InferenceRequest | None = None) -> dict[str, Any]
                 "fair": context.market.fair,
                 "best_bid": context.market.best_bid,
                 "best_ask": context.market.best_ask,
-                "headline": headline.headline,
+                "headline": published.headline,
+                "headline_tick_id": published.tick_id,
+                "news": [n.model_dump(mode="json") for n in context.news],
             },
         }
     except Exception as exc:
@@ -216,7 +219,12 @@ def _inference_hint(model: str, exc: Exception) -> str:
     """Human-friendly suggestion based on the model string + error message."""
     msg = str(exc).lower()
     if model.startswith("gateway/"):
-        if "api_key" in msg or "api key" in msg or "gateway" in msg or "unauthorized" in msg:
+        if (
+            "api_key" in msg
+            or "api key" in msg
+            or "gateway" in msg
+            or "unauthorized" in msg
+        ):
             return "Set PYDANTIC_AI_GATEWAY_API_KEY in backend/.env (gateway model string)."
         return "Gateway model string detected (prefix gateway/). Check PYDANTIC_AI_GATEWAY_API_KEY and backend logs."
 

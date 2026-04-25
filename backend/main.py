@@ -10,13 +10,16 @@ from fastapi.middleware.cors import CORSMiddleware
 # .env must load before observability so LOGFIRE_TOKEN / ENVIRONMENT are visible.
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
+from agents import default_roster  # noqa: E402
 from auth import FirebaseUser, OptionalFirebaseUser  # noqa: E402
 from debug_api import router as debug_router  # noqa: E402
 from exchange_api import router as exchange_router  # noqa: E402
 from firebase_service import auto_initialize  # noqa: E402
+from news_api import router as news_router  # noqa: E402
 from notifications import router as notifications_router  # noqa: E402
 from observability import configure_observability, instrument_app  # noqa: E402
 from runtime import runtime as exchange_runtime  # noqa: E402
+from swarm import agent_swarm  # noqa: E402
 
 configure_observability()
 
@@ -25,11 +28,16 @@ auto_initialize()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Start/stop the exchange tick loop alongside the app."""
+    """Start/stop the exchange tick loop and the agent swarm alongside the app."""
     exchange_runtime.start()
+    for persona in default_roster():
+        agent_swarm.register(persona)
+    agent_swarm.start()
     try:
         yield
     finally:
+        # Stop the swarm first so agents stop submitting before the exchange tears down.
+        await agent_swarm.stop()
         await exchange_runtime.stop()
 
 
@@ -58,6 +66,7 @@ app.add_middleware(
 # Include routers
 app.include_router(notifications_router)
 app.include_router(exchange_router)
+app.include_router(news_router)
 app.include_router(debug_router)
 
 

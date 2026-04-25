@@ -6,9 +6,14 @@ import { Button } from "../ui/Button";
 
 interface HeadlineInjectorProps {
   onInject: (title: string) => void;
+  /**
+   * When true, render without an outer border / surface step — for use as the
+   * compose row inside another bordered panel (e.g. inside the News panel).
+   */
+  flush?: boolean;
 }
 
-export function HeadlineInjector({ onInject }: HeadlineInjectorProps) {
+export function HeadlineInjector({ onInject, flush }: HeadlineInjectorProps) {
   const [title, setTitle] = useState("");
 
   const submit = () => {
@@ -17,15 +22,23 @@ export function HeadlineInjector({ onInject }: HeadlineInjectorProps) {
     setTitle("");
   };
 
+  const wrapperClass = flush
+    ? ""
+    : "border border-[var(--color-line-strong)] bg-[var(--color-surface-2)]";
+
   return (
-    <div className="border border-[var(--color-line-strong)] bg-[var(--color-surface-2)]">
+    <div className={wrapperClass}>
       <textarea
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+          // Plain Enter sends; Shift+Enter inserts a newline (standard chat ergonomics).
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
         }}
-        placeholder="Type a headline · ⌘↵ to inject"
+        placeholder="Type a headline · ↵ to inject · ⇧↵ for newline"
         rows={2}
         className="block w-full resize-none bg-transparent px-3 py-2.5 text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-faint)] focus:outline-none"
       />

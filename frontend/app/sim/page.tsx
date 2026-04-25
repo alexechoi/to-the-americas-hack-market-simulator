@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { AgentReasoning } from "@/app/components/sim/AgentReasoning";
 import { AgentSwarm } from "@/app/components/sim/AgentSwarm";
+import { BackendNewsFeed } from "@/app/components/sim/BackendNewsFeed";
 import { HeadlineInjector } from "@/app/components/sim/HeadlineInjector";
 import { OrderBook } from "@/app/components/sim/OrderBook";
 import { PriceChart } from "@/app/components/sim/PriceChart";
@@ -14,6 +15,8 @@ import { Logo } from "@/app/components/ui/Logo";
 import { Panel } from "@/app/components/ui/Panel";
 import { Tag } from "@/app/components/ui/Tag";
 import { useExchange } from "@/app/lib/exchange/useExchange";
+import { injectHeadline } from "@/app/lib/news/api";
+import { useNews } from "@/app/lib/news/useNews";
 import { useSimulation } from "@/app/lib/sim/useSimulation";
 
 export default function SimPage() {
@@ -29,7 +32,21 @@ export default function SimPage() {
     pricePoints: exchangePricePoints,
     openPrice: exchangeOpenPrice,
     lastTrade: exchangeLastTrade,
+    priceAt: exchangePriceAt,
   } = useExchange();
+  const { headlines, connected: newsConnected } = useNews();
+
+  const onInjectHeadline = useCallback(
+    (title: string) => {
+      // Mirror to the legacy mock (drives existing decision animations) AND publish
+      // to the backend so real agents see the same anchored headline.
+      controls.injectHeadline(title);
+      injectHeadline({ source: "user", headline: title }).catch((err) => {
+        console.error("news inject failed", err);
+      });
+    },
+    [controls],
+  );
 
   // Header price/change is now driven by the backend exchange (fair price), not the mock.
   const headerPrice = exchangeSnapshot?.fair ?? null;
@@ -210,10 +227,42 @@ export default function SimPage() {
           </Panel>
         </div>
 
-        {/* Right column · inject + reasoning */}
+        {/* Right column · news (compose + tape) + reasoning */}
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
-          <Panel title="Inject headline" caption="⌘↵" className="shrink-0">
-            <HeadlineInjector onInject={controls.injectHeadline} />
+          <Panel
+            title="News"
+            caption={
+              headlines.length
+                ? `${headlines.length} on tape · ↵ to inject`
+                : "↵ to inject"
+            }
+            right={
+              <LiveDot
+                tone={newsConnected ? "live" : "paused"}
+                label={newsConnected ? "Live" : "Connecting"}
+              />
+            }
+            flush
+            className="min-h-0 flex-[1.4]"
+            bodyClassName="min-h-0 flex-1 flex flex-col"
+          >
+            {/* Compose row — flush so the panel border owns the outer edge. */}
+            <div className="border-b border-[var(--color-line)]">
+              <HeadlineInjector onInject={onInjectHeadline} flush />
+            </div>
+            {/* Tape — scrollable feed below the compose row. */}
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
+              <BackendNewsFeed
+                headlines={headlines}
+                currentFair={exchangeSnapshot?.fair ?? null}
+                priceAt={exchangePriceAt}
+                emptyHint={
+                  newsConnected
+                    ? "Awaiting first headline."
+                    : "Connecting to news feed…"
+                }
+              />
+            </div>
           </Panel>
 
           <Panel

@@ -4,16 +4,16 @@ Two boundaries live here:
 
 1. **Spawn / config side** (`TraderArchetype`, `TraderPersona`, `SpawnConfig`) — what the
    orchestrator hands the runtime to bring agents into existence.
-2. **Runtime side** (`NewsHeadline`, `MarketContextView`, `AccountView`, `TraderContext`,
+2. **Runtime side** (`NewsView`, `MarketContextView`, `AccountView`, `TraderContext`,
    `TraderDecision`) — the data the LLM sees on a turn and the structured action it returns.
 
 Internal exchange types (`exchange/types.py`) stay as dataclasses for hot-path performance.
-This module owns the LLM-facing boundary and the conversion helpers between the two worlds.
+Wire-format news (`news.NewsHeadline`) lives next to the news bus. This module owns the
+LLM-facing boundary and the conversion helpers between the three worlds.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import StrEnum
 from typing import Self
 from uuid import uuid4
@@ -27,6 +27,7 @@ from exchange.types import (
     Ladder,
     Snapshot,
 )
+from news import NewsHeadline
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +107,7 @@ class SpawnConfig(BaseModel):
     ticker: str = Field(min_length=1, max_length=16)
     initial_fair: float = Field(gt=0.0)
     personas: list[TraderPersona] = Field(min_length=1)
-    seed_news: list["NewsHeadline"] = Field(default_factory=list)
+    seed_news: list[NewsHeadline] = Field(default_factory=list)
     session_seed: int = 0
 
 
@@ -115,16 +116,21 @@ class SpawnConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class NewsHeadline(BaseModel):
-    """A single headline injected into the agent's context window."""
+class NewsView(BaseModel):
+    """Lean LLM-facing news item: text + scalar price-move-since-arrival.
+
+    Built lazily at observation time from a wire-format `NewsHeadline` plus the
+    exchange's price history, so the LLM never sees the raw `tick_id` anchor.
+    `pct_change_since` is a percent (e.g. 1.25 for +1.25%).
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    headline_id: str = Field(default_factory=lambda: f"news_{uuid4().hex[:8]}")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now().astimezone())
-    source: str = Field(default="user", min_length=1, max_length=64)
-    headline: str = Field(min_length=1, max_length=512)
-    body: str | None = Field(default=None, max_length=4_000)
+    headline: str
+    source: str
+    pct_change_since: float = Field(
+        description="Percent change in fair since this headline's tick_id (e.g. 1.25 = +1.25%).",
+    )
 
 
 class LadderLevelView(BaseModel):
@@ -213,7 +219,7 @@ class TraderContext(BaseModel):
     persona: TraderPersona
     market: MarketContextView
     account: AccountView
-    news: list[NewsHeadline] = Field(default_factory=list)
+    news: list[NewsView] = Field(default_factory=list)
 
     @classmethod
     def build(
@@ -221,7 +227,7 @@ class TraderContext(BaseModel):
         *,
         persona: TraderPersona,
         observation: AgentObservation,
-        news: list[NewsHeadline] | None = None,
+        news: list[NewsView] | None = None,
     ) -> "TraderContext":
         return cls(
             persona=persona,

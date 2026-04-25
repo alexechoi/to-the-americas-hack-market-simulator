@@ -91,8 +91,9 @@ async def submit_order(req: OrderRequest) -> dict[str, Any]:
     """
     Submit a Fill-Or-Kill order and execute it immediately against the current ladder.
 
-    Returns the actual outcome (filled / killed / hold). The trade also lands in the
-    SSE stream's recent_trades within the next backend tick.
+    Returns the actual outcome (filled / killed / hold). Filled manual orders are
+    also pushed to the SSE trade_log stream with no reasoning attached (since the
+    caller is a human, not a swarm agent).
     """
     if abs(req.qty) > 1_000_000:
         raise HTTPException(status_code=400, detail="qty out of range")
@@ -100,22 +101,34 @@ async def submit_order(req: OrderRequest) -> dict[str, Any]:
     # Async handler runs on the event loop, so this is naturally serialized
     # with the tick loop — no explicit lock needed.
     result = runtime.exchange.execute_now(order)
+    if isinstance(result, Fill):
+        # Manual trades go through the same trade_log channel as agent trades —
+        # the consumer renders them with no reasoning blurb.
+        runtime.log_fill(result)
     return _serialize_result(result)
 
 
 @router.get("/stream")
 async def stream():
     """
-    Server-Sent Events stream of Snapshot dicts.
+    Server-Sent Events stream multiplexing two event types onto one connection:
 
-    The first event is the current state; subsequent events fire on every backend tick
-    (5 Hz UI breathe + 1 Hz event ticks, configured in runtime.py).
+    * ``snapshot`` — full Snapshot dict; fires every backend tick
+      (5 Hz UI breathe + 1 Hz event ticks, configured in runtime.py).
+    * ``trade_log`` — one entry per fill (agent or manual); fires immediately
+      after the exchange produces the fill.
+
+    On connect the client receives the current snapshot followed by a replay of
+    the recent trade-log buffer, so a late-joining UI panel renders immediately.
     """
 
     async def event_generator():
         try:
-            async for snap in runtime.stream():
-                yield {"event": "snapshot", "data": json.dumps(snap)}
+            async for envelope in runtime.stream():
+                yield {
+                    "event": envelope["event"],
+                    "data": json.dumps(envelope["data"]),
+                }
         except asyncio.CancelledError:
             # Client disconnected — clean up handled by stream() finally block.
             raise

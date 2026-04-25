@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PricePoint } from "@/app/lib/sim/types";
 
@@ -9,6 +9,11 @@ import type { ExchangeSnapshot, Trade } from "./types";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const DEFAULT_HISTORY_CAP = 600; // ~2 minutes at 5 Hz
+
+interface FairTick {
+  tick_id: number;
+  fair: number;
+}
 
 interface UseExchangeOptions {
   enabled?: boolean;
@@ -26,6 +31,11 @@ interface UseExchangeResult {
   openPrice: number | null;
   /** Latest fill from the server (or null if none yet). */
   lastTrade: Trade | null;
+  /**
+   * Returns the last observed fair at or before `tick_id`, or `null` if we
+   * haven't seen anything yet. Mirrors the backend's `Exchange.price_at`.
+   */
+  priceAt: (tick_id: number) => number | null;
 }
 
 /**
@@ -52,6 +62,19 @@ export function useExchange(
   // Per-snapshot fingerprint of the latest trade we've already counted, so we can detect
   // genuinely new fills (recent_trades is a sliding window the server pushes every tick).
   const lastTradeFingerprintRef = useRef<string | null>(null);
+  // Tick→fair timeline (monotonic by tick_id), used by `priceAt` for news pct anchors.
+  // Held as a ref so the SSE effect doesn't re-fire on every append.
+  const fairTimelineRef = useRef<FairTick[]>([]);
+
+  const priceAt = useCallback((tick_id: number): number | null => {
+    const tl = fairTimelineRef.current;
+    if (tl.length === 0) return null;
+    // Backward linear scan — tl is sorted ascending and most queries land near the tail.
+    for (let i = tl.length - 1; i >= 0; i--) {
+      if (tl[i].tick_id <= tick_id) return tl[i].fair;
+    }
+    return null;
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -88,6 +111,16 @@ export function useExchange(
         return [...prev, point];
       });
 
+      // Append to the tick-keyed fair timeline (dedup if same tick_id has already landed).
+      const tl = fairTimelineRef.current;
+      const last = tl.length > 0 ? tl[tl.length - 1] : null;
+      if (!last || last.tick_id !== data.tick_id) {
+        tl.push({ tick_id: data.tick_id, fair: data.fair });
+        if (tl.length > historyCap) {
+          tl.splice(0, tl.length - historyCap);
+        }
+      }
+
       // Detect new fills by fingerprinting the latest trade.
       const latest = data.recent_trades[data.recent_trades.length - 1] ?? null;
       if (latest) {
@@ -112,5 +145,12 @@ export function useExchange(
     };
   }, [enabled, historyCap]);
 
-  return { snapshot, connected, pricePoints, openPrice, lastTrade };
+  return {
+    snapshot,
+    connected,
+    pricePoints,
+    openPrice,
+    lastTrade,
+    priceAt,
+  };
 }
