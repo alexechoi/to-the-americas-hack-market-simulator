@@ -51,7 +51,6 @@ export function OrderBook({ snapshot, agentId = "manual" }: OrderBookProps) {
 
 interface AnnotatedLevel extends LadderLevel {
   cumSize: number;
-  cumDollar: number;
 }
 
 const GRID_COLS = "grid-cols-[64px_1fr_1fr_1fr]";
@@ -66,38 +65,24 @@ function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
   // Asks: server delivers ascending; reverse so worst ask renders at top, best ask at bottom (touching the spread row).
   const asksTopDown = useMemo(() => [...ladder.asks].reverse(), [ladder.asks]);
 
-  // Cumulate from the inside out so the row nearest the spread reads its own size,
-  // and rows further away read the running total (mirrors Polymarket's TOTAL column).
+  // Cumulate sizes from the inside out so the depth bar grows as we move away
+  // from the spread. The displayed Value column is per-row (price × quantity).
   const asksAnnotated = useMemo<AnnotatedLevel[]>(() => {
-    const out = asksTopDown.map((lvl) => ({
-      ...lvl,
-      cumSize: 0,
-      cumDollar: 0,
-    }));
+    const out = asksTopDown.map((lvl) => ({ ...lvl, cumSize: 0 }));
     let cumSize = 0;
-    let cumDollar = 0;
     for (let i = out.length - 1; i >= 0; i--) {
       cumSize += out[i].size;
-      cumDollar += out[i].size * out[i].price;
       out[i].cumSize = cumSize;
-      out[i].cumDollar = cumDollar;
     }
     return out;
   }, [asksTopDown]);
 
   const bidsAnnotated = useMemo<AnnotatedLevel[]>(() => {
-    const out = ladder.bids.map((lvl) => ({
-      ...lvl,
-      cumSize: 0,
-      cumDollar: 0,
-    }));
+    const out = ladder.bids.map((lvl) => ({ ...lvl, cumSize: 0 }));
     let cumSize = 0;
-    let cumDollar = 0;
     for (let i = 0; i < out.length; i++) {
       cumSize += out[i].size;
-      cumDollar += out[i].size * out[i].price;
       out[i].cumSize = cumSize;
-      out[i].cumDollar = cumDollar;
     }
     return out;
   }, [ladder.bids]);
@@ -118,12 +103,12 @@ function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
       >
         <span>Trade</span>
         <span className="text-right">Price</span>
-        <span className="text-right">Shares</span>
-        <span className="text-right">Total</span>
+        <span className="text-right">Quantity</span>
+        <span className="text-right">Value</span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex flex-1 flex-col-reverse overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden">
           {asksAnnotated.map((lvl, i) => (
             <Row
               key={`a-${i}-${lvl.price}`}
@@ -193,7 +178,7 @@ function Row({
       </span>
       <span className="relative text-right text-[var(--color-fg)]">
         $
-        {level.cumDollar.toLocaleString(undefined, {
+        {(level.price * level.size).toLocaleString(undefined, {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         })}
