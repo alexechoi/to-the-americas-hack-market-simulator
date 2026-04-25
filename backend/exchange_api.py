@@ -13,6 +13,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from bootstrap import BootstrapError, bootstrap_from_yahoo
 from exchange.types import Fill, Hold, Killed, Order, OrderResult
+from lifecycle import get_lifecycle
 from runtime import _serialize_snapshot, runtime
 from swarm import agent_swarm
 
@@ -57,6 +58,21 @@ def get_state() -> dict[str, Any]:
     return runtime.state_payload()
 
 
+@router.get("/lifecycle")
+def get_lifecycle_status() -> dict[str, Any]:
+    """Auto-pause controller status — useful for debugging "why isn't the sim ticking?".
+
+    Returns the current viewer count, whether the sim is running or paused,
+    whether a delayed pause is pending, and the configured grace window.
+    Returns ``{"configured": False}`` if the lifecycle hasn't been wired yet
+    (e.g. during a unit-test import that doesn't run the lifespan).
+    """
+    lifecycle = get_lifecycle()
+    if lifecycle is None:
+        return {"configured": False}
+    return {"configured": True, **lifecycle.status()}
+
+
 @router.post("/spawn")
 async def spawn(req: SpawnRequest) -> dict[str, Any]:
     """Rebootstrap the simulation around ``req.ticker`` using Yahoo Finance data.
@@ -97,14 +113,20 @@ def list_agents() -> list[dict[str, Any]]:
     """Return the live swarm roster — one entry per registered persona.
 
     The frontend uses this to lay out the Agent Swarm panel (one dot per agent,
-    grouped by archetype) and to map order-log entries back to a known cohort.
-    Static at app startup; refetched only on a frontend remount.
+    grouped by archetype), to surface persona detail in the swarm-dot hover
+    tooltip, and to map order-log entries back to a known cohort. Static at
+    app startup; refetched only on a frontend remount.
     """
     return [
         {
             "agent_id": p.agent_id,
             "display_name": p.display_name,
             "archetype": p.archetype.value,
+            "risk_tolerance": p.risk_tolerance.value,
+            "time_horizon": p.time_horizon.value,
+            "tick_period_s": p.tick_period_s,
+            "max_order_size": p.max_order_size,
+            "backstory": p.backstory,
         }
         for p in agent_swarm.list_personas()
     ]

@@ -22,7 +22,7 @@ import asyncio
 import logging
 import time
 from collections import deque
-from typing import Any, AsyncIterator, Iterable
+from typing import Any, AsyncIterator, Callable, Iterable
 from uuid import uuid4
 
 from agents.memory import memory
@@ -161,6 +161,12 @@ class ExchangeRuntime:
         self._order_log: deque[dict[str, Any]] = deque(maxlen=ORDER_LOG_BUFFER)
         self._task: asyncio.Task[None] | None = None
         self._counter = 0
+        # Viewer hooks driven by the lifecycle controller. Late-bound — the
+        # FastAPI lifespan installs them right after constructing the
+        # SimLifecycle. Both default to no-ops so the runtime is usable
+        # standalone in tests without pulling lifecycle.py into scope.
+        self._on_subscribe: Callable[[], None] | None = None
+        self._on_unsubscribe: Callable[[], None] | None = None
 
     # ---- lifecycle ----
 
@@ -196,6 +202,22 @@ class ExchangeRuntime:
 
     # ---- subscribers ----
 
+    def set_viewer_hooks(
+        self,
+        *,
+        on_subscribe: Callable[[], None] | None,
+        on_unsubscribe: Callable[[], None] | None,
+    ) -> None:
+        """Install callbacks fired on every SSE subscribe / unsubscribe.
+
+        Used by ``lifecycle.SimLifecycle`` to ref-count active viewers and
+        auto-pause the sim when nobody is watching. Pass ``None`` to clear.
+        Hooks are called synchronously from the SSE handler hot path — keep
+        them cheap (the lifecycle dispatches its async work to a task).
+        """
+        self._on_subscribe = on_subscribe
+        self._on_unsubscribe = on_unsubscribe
+
     def _subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         # Queue size 64 because we multiplex three event types on one queue:
         # reset (rare), snapshot ticks (5 Hz), and bursty order_log entries.
@@ -226,10 +248,25 @@ class ExchangeRuntime:
             except asyncio.QueueFull:
                 break
         self._subscribers.add(q)
+        # Fire the viewer hook AFTER the queue is fully primed so the lifecycle
+        # never sees a window with viewer-count > 0 but no subscriber attached.
+        if self._on_subscribe is not None:
+            try:
+                self._on_subscribe()
+            except Exception:
+                # Hooks must never break the SSE handshake. Log and move on —
+                # worst case the sim doesn't auto-resume, which surfaces as a
+                # frozen UI rather than a 500.
+                logger.exception("on_subscribe hook failed")
         return q
 
     def _unsubscribe(self, q: asyncio.Queue[dict[str, Any]]) -> None:
         self._subscribers.discard(q)
+        if self._on_unsubscribe is not None:
+            try:
+                self._on_unsubscribe()
+            except Exception:
+                logger.exception("on_unsubscribe hook failed")
 
     async def stream(self) -> AsyncIterator[dict[str, Any]]:
         """Async generator yielding ``{"event", "data"}`` envelopes per fan-out item."""

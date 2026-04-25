@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   type Archetype,
@@ -21,9 +28,9 @@ interface AgentSwarmProps {
 /** Pixel radius (CSS) used for cursor hit-testing — slightly larger than the
  *  visible dot so dots are easy to grab without pixel-perfect aim. */
 const HIT_RADIUS = 9;
-/** Tooltip box dimensions (CSS) used to keep it inside the panel. */
-const TOOLTIP_W = 240;
-const TOOLTIP_H = 132;
+/** Tooltip CSS width — height is measured from the rendered DOM and used to
+ *  flip the tooltip vertically near the bottom edge. */
+const TOOLTIP_W = 260;
 
 /**
  * Each agent is a fixed point on a packed grid, clustered by reaction-speed
@@ -176,9 +183,6 @@ export function AgentSwarm({
 
   const handlePointerLeave = () => setHoveredId(null);
 
-  const tooltipPos = hoveredNode
-    ? clampTooltip(hoveredNode.x, hoveredNode.y, size.w, size.h)
-    : null;
   const hoveredAgent = hoveredNode?.agent ?? null;
   const hoveredLast = hoveredAgent
     ? (lastByAgent.get(hoveredAgent.agent_id) ?? null)
@@ -196,12 +200,14 @@ export function AgentSwarm({
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
       />
-      {hoveredAgent && tooltipPos && (
+      {hoveredAgent && hoveredNode && (
         <AgentTooltip
           agent={hoveredAgent}
           last={hoveredLast}
-          x={tooltipPos.x}
-          y={tooltipPos.y}
+          anchorX={hoveredNode.x}
+          anchorY={hoveredNode.y}
+          containerW={size.w}
+          containerH={size.h}
         />
       )}
     </div>
@@ -211,11 +217,20 @@ export function AgentSwarm({
 interface AgentTooltipProps {
   agent: BackendAgent;
   last: OrderLogEntry | null;
-  x: number;
-  y: number;
+  anchorX: number;
+  anchorY: number;
+  containerW: number;
+  containerH: number;
 }
 
-function AgentTooltip({ agent, last, x, y }: AgentTooltipProps) {
+function AgentTooltip({
+  agent,
+  last,
+  anchorX,
+  anchorY,
+  containerW,
+  containerH,
+}: AgentTooltipProps) {
   const meta = archetypeMeta(agent.archetype);
   const tierLabel = TIERS.find((t) => t.id === meta.tier)?.label ?? meta.tier;
   const tone =
@@ -225,13 +240,30 @@ function AgentTooltip({ agent, last, x, y }: AgentTooltipProps) {
         ? "var(--color-down)"
         : "var(--color-fg-muted)";
   const showQty = last && last.action !== "hold";
+
+  // Measure the tooltip after render so we can flip it above/left of the dot
+  // when there isn't room below/right. Persona content (especially backstory)
+  // varies in height, so a fixed-height clamp would either crop or float.
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const h = el.offsetHeight;
+    setPos(clampTooltip(anchorX, anchorY, containerW, containerH, h));
+  }, [agent.agent_id, last?.id, anchorX, anchorY, containerW, containerH]);
+
   return (
     <div
+      ref={tooltipRef}
       className="pointer-events-none absolute z-10 border border-[var(--color-line-strong)] bg-[var(--color-surface-2)] px-3 py-2.5 shadow-lg"
       style={{
-        left: x,
-        top: y,
+        left: pos?.x ?? anchorX,
+        top: pos?.y ?? anchorY,
         width: TOOLTIP_W,
+        // Hide the first paint until we've measured + clamped, so the tooltip
+        // never appears mid-flip near a viewport edge.
+        opacity: pos ? 1 : 0,
       }}
     >
       <div className="flex items-baseline justify-between gap-2">
@@ -246,10 +278,26 @@ function AgentTooltip({ agent, last, x, y }: AgentTooltipProps) {
         {tierLabel}
       </div>
 
+      <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <PersonaTag>{formatRisk(agent.risk_tolerance)}</PersonaTag>
+        <PersonaTag>{formatHorizon(agent.time_horizon)}</PersonaTag>
+        <PersonaTag>{formatCadence(agent.tick_period_s)}</PersonaTag>
+        <PersonaTag>max {agent.max_order_size}</PersonaTag>
+      </div>
+
+      {agent.backstory && (
+        <p className="mt-2 line-clamp-3 text-[11px] leading-snug text-[var(--color-fg-muted)]">
+          {agent.backstory}
+        </p>
+      )}
+
       <div className="mt-2 border-t border-[var(--color-line)] pt-2">
+        <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+          Last decision
+        </div>
         {last ? (
           <>
-            <div className="flex items-baseline gap-2">
+            <div className="mt-1 flex items-baseline gap-2">
               <span
                 className="font-mono text-[10px] tabular-nums tracking-[0.16em]"
                 style={{ color: tone }}
@@ -275,12 +323,20 @@ function AgentTooltip({ agent, last, x, y }: AgentTooltipProps) {
             )}
           </>
         ) : (
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+          <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
             No decisions yet
           </span>
         )}
       </div>
     </div>
+  );
+}
+
+function PersonaTag({ children }: { children: ReactNode }) {
+  return (
+    <span className="border border-[var(--color-line)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--color-fg-muted)]">
+      {children}
+    </span>
   );
 }
 
@@ -419,12 +475,15 @@ function nearestNode(
   return best;
 }
 
-/** Place the tooltip near the dot, flipping sides so it stays inside the panel. */
+/** Place the tooltip near the dot, flipping sides so it stays inside the panel.
+ *  Height is the measured DOM height — content is variable so the caller passes
+ *  it in after layout instead of assuming a fixed value. */
 function clampTooltip(
   nodeX: number,
   nodeY: number,
   containerW: number,
   containerH: number,
+  tooltipH: number,
 ): { x: number; y: number } {
   const margin = 6;
   const offset = 12;
@@ -432,10 +491,10 @@ function clampTooltip(
   const x = fitsRight
     ? nodeX + offset
     : Math.max(margin, nodeX - offset - TOOLTIP_W);
-  const fitsBelow = nodeY + offset + TOOLTIP_H + margin <= containerH;
+  const fitsBelow = nodeY + offset + tooltipH + margin <= containerH;
   const y = fitsBelow
     ? nodeY + offset
-    : Math.max(margin, nodeY - offset - TOOLTIP_H);
+    : Math.max(margin, nodeY - offset - tooltipH);
   return { x, y };
 }
 
@@ -448,6 +507,23 @@ function formatAgo(ts: number): string {
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   return `${h}h ago`;
+}
+
+function formatRisk(risk: string): string {
+  // Backend ships lowercase enums; chip labels are uppercase elsewhere in the UI.
+  return risk.replace(/_/g, " ");
+}
+
+function formatHorizon(horizon: string): string {
+  return horizon.replace(/_/g, " ");
+}
+
+/** Render a persona's nominal cadence as a human-friendly chip ("~5s", "~2m"). */
+function formatCadence(seconds: number): string {
+  if (seconds < 60) return `~${Math.round(seconds)}s`;
+  const m = seconds / 60;
+  // One decimal under 10 minutes (e.g. 2.5m), whole minutes after.
+  return m < 10 ? `~${m.toFixed(1)}m` : `~${Math.round(m)}m`;
 }
 
 function withAlpha(hex: string, alpha: number): string {

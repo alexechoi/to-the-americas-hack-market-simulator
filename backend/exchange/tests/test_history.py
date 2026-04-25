@@ -47,6 +47,52 @@ def test_no_fair_change_no_new_point(flat_params: MMParams):
     assert len(ex.price_history()) == initial_len
 
 
+def test_noise_moves_fair_without_orders():
+    """When ``noise_bps > 0``, idle UI ticks move ``fair`` and grow the history.
+
+    The shock is independent of order flow — this is what makes the chart
+    breathe during quiet periods.
+    """
+    params = MMParams(
+        size_jitter=0.0, imbalance=0.0, gap_prob=0.0, jumbo_prob=0.0, noise_bps=10.0
+    )
+    ex = Exchange(params=params, initial_fair=100.0, session_seed=42)
+    initial_fair = ex.state.fair
+    initial_len = len(ex.price_history())
+
+    for _ in range(50):
+        ex.tick(advance_event=False)
+
+    assert ex.state.fair != pytest.approx(initial_fair)
+    assert len(ex.price_history()) == initial_len + 50
+    # σ per tick = fair · 10 bps = 0.1; over 50 ticks the random walk std ≈ 0.71.
+    # The drift should stay well within ±5 σ for any reasonable seed.
+    assert abs(ex.state.fair - initial_fair) < 5.0
+
+
+def test_noise_is_deterministic_across_runs():
+    """Same ``salt_seed`` → same random-walk path. Lets demos be reproducible."""
+    params = MMParams(
+        size_jitter=0.0, imbalance=0.0, gap_prob=0.0, jumbo_prob=0.0, noise_bps=10.0
+    )
+    a = Exchange(params=params, initial_fair=100.0, session_seed=7)
+    b = Exchange(params=params, initial_fair=100.0, session_seed=7)
+    for _ in range(20):
+        a.tick(advance_event=False)
+        b.tick(advance_event=False)
+    assert a.state.fair == pytest.approx(b.state.fair)
+
+
+def test_noise_off_by_default(flat_params: MMParams):
+    """``noise_bps`` defaults to 0 — engine stays purely order-driven for tests."""
+    assert flat_params.noise_bps == 0.0
+    ex = Exchange(params=flat_params, initial_fair=100.0)
+    for _ in range(20):
+        ex.tick(advance_event=False)
+    assert ex.state.fair == pytest.approx(100.0)
+    assert len(ex.price_history()) == 1  # just the seed point
+
+
 def test_price_at_returns_last_recorded_le_tick(flat_params: MMParams):
     """`price_at(t)` is the fair in effect at tick t — the last recorded fair with tick_id ≤ t."""
     ex = Exchange(params=flat_params, initial_fair=100.0)

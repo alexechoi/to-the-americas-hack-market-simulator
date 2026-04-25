@@ -92,17 +92,34 @@ export interface ExchangeState {
   fetched_at: string | null;
 }
 
+/** Mirrors backend `RiskTolerance`. */
+export type RiskTolerance = "aggressive" | "moderate" | "conservative";
+
+/** Mirrors backend `TimeHorizon`. */
+export type TimeHorizon = "intraday" | "short_term" | "long_term";
+
 /**
  * One registered persona in the backend swarm — returned by GET /exchange/agents.
  *
  * Archetype strings mirror backend `TraderArchetype` (hft, hedge_fund,
  * pension_fund, retail). The frontend uses them to group dots into cohort
- * tiers on the swarm panel and to colour order-log rows.
+ * tiers on the swarm panel, to surface persona detail in the swarm-dot
+ * tooltip, and to colour order-log rows.
  */
 export interface BackendAgent {
   agent_id: string;
   display_name: string;
   archetype: string;
+  /** Persona's risk tolerance — drives sizing tone in the prompt. */
+  risk_tolerance: RiskTolerance;
+  /** Persona's primary holding horizon. */
+  time_horizon: TimeHorizon;
+  /** Nominal seconds between this agent's decision turns (jittered ±20% server-side). */
+  tick_period_s: number;
+  /** Hard cap on lots per order; the LLM never goes above this. */
+  max_order_size: number;
+  /** Free-form persona blurb spliced into the system prompt. */
+  backstory: string;
 }
 
 /** What the LLM decided this turn. Mirrors backend `TraderAction`. */

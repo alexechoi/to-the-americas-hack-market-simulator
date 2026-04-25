@@ -18,6 +18,7 @@ from bootstrap import BootstrapError, bootstrap_from_yahoo  # noqa: E402
 from debug_api import router as debug_router  # noqa: E402
 from exchange_api import router as exchange_router  # noqa: E402
 from firebase_service import auto_initialize  # noqa: E402
+from lifecycle import configure as configure_lifecycle  # noqa: E402
 from news_api import router as news_router  # noqa: E402
 from notifications import router as notifications_router  # noqa: E402
 from observability import configure_observability, instrument_app  # noqa: E402
@@ -50,7 +51,13 @@ async def lifespan(_app: FastAPI):
         3. If Yahoo is unreachable or returns nothing usable, log a warning and
            keep the runtime's default cold-start state (fair=100.0, ticker=NVDA,
            no seed news) so the backend always boots.
-        4. Start the exchange tick loop and the swarm task fleet.
+        4. Wire up the auto-pause lifecycle controller (``lifecycle.SimLifecycle``)
+           which gates the exchange tick loop and the swarm on the count of
+           active SSE viewers. With auto-pause enabled (default), boot leaves
+           the sim **paused** — the first SSE subscriber resumes it, and the
+           sim auto-pauses ``AUTO_PAUSE_GRACE_S`` seconds after the last viewer
+           disconnects. Set ``AUTO_PAUSE_ENABLED=false`` to keep the legacy
+           "always running on boot" behaviour.
     """
     # Initialise the MuBit memory layer once per process. Idempotent and a
     # no-op when MUBIT_API_KEY is unset, so local dev without credentials
@@ -82,14 +89,25 @@ async def lifespan(_app: FastAPI):
         # cold-start traders still write to memory under a real run.
         agent_memory.set_run_id(make_sim_run_id(exchange_runtime.ticker))
 
-    exchange_runtime.start()
-    agent_swarm.start()
+    sim_lifecycle = configure_lifecycle(
+        start_exchange=exchange_runtime.start,
+        stop_exchange=exchange_runtime.stop,
+        start_swarm=agent_swarm.start,
+        stop_swarm=agent_swarm.stop,
+    )
+    # Wire SSE subscribe/unsubscribe → lifecycle viewer counter.
+    exchange_runtime.set_viewer_hooks(
+        on_subscribe=sim_lifecycle.on_subscribe,
+        on_unsubscribe=sim_lifecycle.on_unsubscribe,
+    )
+    await sim_lifecycle.boot()
     try:
         yield
     finally:
-        # Stop the swarm first so agents stop submitting before the exchange tears down.
-        await agent_swarm.stop()
-        await exchange_runtime.stop()
+        # Detach the hooks first so any in-flight SSE teardown during shutdown
+        # doesn't try to schedule a delayed pause as we're tearing things down.
+        exchange_runtime.set_viewer_hooks(on_subscribe=None, on_unsubscribe=None)
+        await sim_lifecycle.shutdown()
 
 
 app = FastAPI(
