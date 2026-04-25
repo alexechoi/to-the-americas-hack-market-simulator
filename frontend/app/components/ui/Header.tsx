@@ -15,9 +15,6 @@ export function Header() {
             <span className="text-sm font-semibold tracking-tight">
               Animal Spirits
             </span>
-            <span className="ml-1 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)] sm:inline">
-              v0.1
-            </span>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-[var(--color-fg-muted)] md:flex">
             <Link
@@ -31,12 +28,6 @@ export function Header() {
               className="transition-colors hover:text-[var(--color-fg)]"
             >
               How it works
-            </Link>
-            <Link
-              href="/debug"
-              className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)] transition-colors hover:text-[var(--color-fg)]"
-            >
-              Debug
             </Link>
           </nav>
         </div>
