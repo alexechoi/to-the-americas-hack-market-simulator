@@ -345,7 +345,13 @@ class ExchangeRuntime:
         await self.stop()
 
         self.exchange = Exchange(params=self._params, initial_fair=payload.initial_fair)
-        self.news_bus = NewsBus(self.exchange)
+        # Re-anchor the news bus around the fresh exchange *in place* instead
+        # of replacing it. The frontend mounts ``useNews`` (which opens an SSE
+        # to /news/stream and subscribes to whatever ``runtime.news_bus`` is at
+        # that instant) in parallel with ``/exchange/spawn``, so a fresh
+        # ``NewsBus(...)`` here would orphan the SSE subscriber and silently
+        # drop every post-respawn headline the user injects.
+        self.news_bus.reset(self.exchange)
         self.ticker = payload.ticker
         self.ticker_name = payload.name
         self.fetched_at = payload.fetched_at

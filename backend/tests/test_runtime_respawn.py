@@ -7,6 +7,8 @@ bypassing the Yahoo path entirely.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from agents.schemas import (
@@ -49,7 +51,11 @@ def _payload(
     )
 
 
-async def test_respawn_swaps_exchange_and_news_bus():
+async def test_respawn_swaps_exchange_and_resets_bus_in_place():
+    """Exchange is swapped out, but the NewsBus instance is *reused* so
+    pre-respawn SSE subscribers (frontend `useNews`) keep receiving live
+    headlines after a /spawn. Replacing the bus would orphan them — see
+    ``test_respawn_preserves_news_subscribers`` below for the regression."""
     rt = ExchangeRuntime(initial_fair=100.0, ticker="NVDA", ticker_name="NVIDIA Corp")
     old_exchange = rt.exchange
     old_bus = rt.news_bus
@@ -57,10 +63,55 @@ async def test_respawn_swaps_exchange_and_news_bus():
     await rt.respawn(_payload(ticker="AAPL", fair=200.0))
 
     assert rt.exchange is not old_exchange
-    assert rt.news_bus is not old_bus
+    # Same bus instance (so existing subscribers are preserved), but its
+    # internal exchange reference now points at the new exchange so future
+    # publishes anchor to the new tick clock.
+    assert rt.news_bus is old_bus
+    assert rt.news_bus._exchange is rt.exchange
     assert rt.ticker == "AAPL"
     assert rt.ticker_name == "AAPL Inc."
     assert rt.exchange.state.fair == pytest.approx(200.0)
+
+
+async def test_respawn_preserves_news_subscribers():
+    """Regression: a frontend tab that connected to /news/stream *before*
+    /exchange/spawn must keep seeing headlines published *after* the spawn.
+
+    The page mounts and fires the news SSE + the spawn POST in parallel; if
+    respawn replaces the bus, the SSE is left subscribed to the old bus and
+    the user's subsequent injections silently disappear.
+    """
+    rt = ExchangeRuntime(initial_fair=100.0, ticker="NVDA", ticker_name="NVIDIA Corp")
+
+    # Subscribe before respawn, mirroring the frontend's race with /spawn.
+    gen = rt.news_bus.stream(prime=0).__aiter__()
+    pull = asyncio.create_task(gen.__anext__())
+    # Yield twice so the generator body runs past `self._subscribers.add(q)`
+    # and is parked on `await q.get()`.
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert len(rt.news_bus._subscribers) == 1
+
+    await rt.respawn(
+        _payload(
+            ticker="AAPL",
+            fair=200.0,
+            seed=[NewsHeadline(tick_id=0, source="yahoo:Reuters", headline="seed-1")],
+        )
+    )
+
+    # The seed news published during respawn lands first on the pre-respawn
+    # subscriber's queue (proves the subscriber wasn't orphaned).
+    seed_hl = await asyncio.wait_for(pull, timeout=1.0)
+    assert seed_hl.headline == "seed-1"
+
+    # And subsequent /news/inject calls — the original failure mode — also
+    # reach the pre-respawn subscriber.
+    next_pull = asyncio.create_task(gen.__anext__())
+    rt.news_bus.publish(source="user", headline="post-spawn injection")
+    hl = await asyncio.wait_for(next_pull, timeout=1.0)
+    assert hl.headline == "post-spawn injection"
+    await gen.aclose()
 
 
 async def test_respawn_reregisters_personas():

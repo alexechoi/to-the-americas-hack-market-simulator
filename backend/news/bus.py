@@ -31,6 +31,25 @@ class NewsBus:
         self._recent: deque[NewsHeadline] = deque(maxlen=recent_cap)
         self._subscribers: set[asyncio.Queue[NewsHeadline]] = set()
 
+    # ---- lifecycle ----
+
+    def reset(self, exchange: Exchange) -> None:
+        """Re-anchor the bus around a fresh exchange without replacing the bus instance.
+
+        Called by ``ExchangeRuntime.respawn`` so live SSE subscribers (e.g. the
+        frontend's ``useNews`` hook, which connects on page mount in parallel
+        with the ``/exchange/spawn`` POST) keep their queue attached and
+        continue to receive headlines published on the new universe.
+
+        Updates the exchange reference (so ``publish`` anchors at the new
+        ``current_tick_id``) and clears the recent buffer so
+        ``stream(prime=...)`` only re-primes new subscribers with post-respawn
+        seed news rather than headlines from the previous ticker. Does **not**
+        touch ``_subscribers`` — that's the whole point.
+        """
+        self._exchange = exchange
+        self._recent.clear()
+
     # ---- publish / read ----
 
     def publish(
