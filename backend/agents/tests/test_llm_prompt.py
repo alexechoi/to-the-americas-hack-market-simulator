@@ -64,15 +64,28 @@ def _account() -> AccountView:
 
 
 def _ctx(
-    *, fair: float = 208.85, best_bid: float = 207.77, best_ask: float = 208.83
+    *,
+    fair: float = 208.85,
+    best_bid: float = 207.77,
+    best_ask: float = 208.83,
+    news: list[NewsView] | None = None,
 ) -> TraderContext:
+    if news is None:
+        # Default: a single STALE headline (10s ago, persona tick=1.0s ⇒ fresh
+        # window 2.5s) so the historical "+1.25% since" rendering still appears.
+        news = [
+            NewsView(
+                headline="Earnings beat",
+                source="yahoo",
+                seconds_ago=10.0,
+                pct_change_since=1.25,
+            )
+        ]
     return TraderContext(
         persona=_persona(),
         market=_market(fair=fair, best_bid=best_bid, best_ask=best_ask),
         account=_account(),
-        news=[
-            NewsView(headline="Earnings beat", source="yahoo", pct_change_since=1.25)
-        ],
+        news=news,
     )
 
 
@@ -104,9 +117,55 @@ def test_runtime_block_includes_account_state():
 
 
 def test_runtime_block_includes_news_with_pct_anchor():
+    """Stale headlines keep the ``pct_change_since`` so the LLM sees how much
+    of the move has already played out."""
     block = _runtime_block(_ctx())
     assert "Earnings beat" in block
     assert "+1.25%" in block
+    assert "[STALE" in block
+
+
+def test_runtime_block_renders_news_above_market_state():
+    """News must appear before market state so the LLM weighs it first.
+
+    Earlier layout buried news at the bottom right above a strong "copy
+    best_ask into limit_price" reminder; the model anchored on the reminder
+    and ignored news. Guard against regression to that ordering.
+    """
+    block = _runtime_block(_ctx())
+    news_idx = block.index("Recent News")
+    market_idx = block.index("Market State")
+    assert news_idx < market_idx, (
+        "News must render before market state; got news at "
+        f"{news_idx}, market at {market_idx}"
+    )
+
+
+def test_runtime_block_flags_fresh_headlines_as_new():
+    """Fresh headlines (seconds_ago < persona.tick_period_s × 2.5) must be
+    tagged [NEW] AND must NOT show the misleading near-zero pct_change_since.
+
+    Persona tick_period_s defaults to 1.0s ⇒ fresh window = 2.5s; a 0.5s-old
+    headline sits comfortably inside it.
+    """
+    fresh = NewsView(
+        headline="Fed cuts rates 50bp",
+        source="reuters",
+        seconds_ago=0.5,
+        pct_change_since=0.0,
+    )
+    block = _runtime_block(_ctx(news=[fresh]))
+    assert "Fed cuts rates 50bp" in block
+    assert "[NEW" in block
+    # Fresh news must NOT show the misleading "+0.00%" since-anchor — that
+    # was the original signal that made LLMs treat breaking news as noise.
+    assert "+0.00%" not in block
+    assert "market not yet repriced" in block
+
+
+def test_runtime_block_handles_empty_news():
+    block = _runtime_block(_ctx(news=[]))
+    assert "no recent headlines" in block
 
 
 def test_runtime_block_reminds_to_copy_prices():

@@ -40,7 +40,13 @@ class NewsBus:
         headline: str,
         body: str | None = None,
     ) -> NewsHeadline:
-        """Anchor at the current exchange tick, broadcast, and remember."""
+        """Anchor at the current exchange tick, broadcast, and remember.
+
+        Also fire-and-forgets the headline into MuBit (when configured) as a
+        shared ``fact`` on the active simulation run, so agents can recall it
+        on later turns even after it ages out of the in-process recent buffer.
+        Memory is a no-op when ``MUBIT_API_KEY`` is unset.
+        """
         hl = NewsHeadline(
             tick_id=self._exchange.current_tick_id,
             source=source,
@@ -49,6 +55,10 @@ class NewsBus:
         )
         self._recent.append(hl)
         self._broadcast(hl)
+        # Imported lazily to avoid a circular import (news -> agents -> news).
+        from agents.memory import memory
+
+        memory.remember_headline_async(source=source, headline=headline, body=body)
         logger.info(
             "news_publish id=%s tick=%d source=%s subs=%d",
             hl.headline_id,

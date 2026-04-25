@@ -13,7 +13,7 @@ and free of domain logic so it stays trivial to test.
 from __future__ import annotations
 
 from exchange import Exchange
-from news import NewsBus
+from news import SECONDS_PER_TICK, NewsBus
 
 from .schemas import (
     NewsView,
@@ -30,13 +30,18 @@ def build_news_view(
 ) -> list[NewsView]:
     """Project the most recent `n` headlines into the LLM-facing `NewsView` shape.
 
-    `pct_change_since` is computed as the percent move of `fair` between the
-    headline's `tick_id` (anchor) and the exchange's current `fair`. Headlines
-    that predate any recorded price (shouldn't happen — exchange seeds at 0)
-    fall back to 0% so the LLM never sees NaN/None.
+    For each headline we surface two freshness signals so the prompt can
+    distinguish breaking news from already-digested news:
+
+    * ``seconds_ago``: ``(current_tick - headline.tick_id) * SECONDS_PER_TICK``,
+      clamped at 0 — new headlines stamped on the same tick read as 0.0s old.
+    * ``pct_change_since``: percent move in ``fair`` between the headline's
+      anchor tick and now. Headlines that predate any recorded price
+      (shouldn't happen — exchange seeds at tick 0) fall back to 0%.
     """
     snap = exchange.snapshot()
     now_fair = snap.fair
+    now_tick = exchange.current_tick_id
     out: list[NewsView] = []
     for hl in bus.recent(n=n):
         anchor = exchange.price_at(hl.tick_id)
@@ -44,10 +49,12 @@ def build_news_view(
             pct = 0.0
         else:
             pct = (now_fair - anchor) / anchor * 100.0
+        ticks_since = max(0, now_tick - hl.tick_id)
         out.append(
             NewsView(
                 headline=hl.headline,
                 source=hl.source,
+                seconds_ago=ticks_since * SECONDS_PER_TICK,
                 pct_change_since=pct,
             )
         )
@@ -60,13 +67,21 @@ def build_trader_context(
     exchange: Exchange,
     news_bus: NewsBus,
     news_limit: int = 5,
+    memory: str = "",
 ) -> TraderContext:
     """One-shot helper: snapshot the world for one persona's turn.
 
     Equivalent to manually composing `exchange.observe`, `build_news_view`, and
     `TraderContext.build` — kept here so call sites (debug_api, agent loops)
     don't drift apart.
+
+    ``memory`` is the pre-assembled MuBit recall block (lessons + recent
+    activity); pass it in pre-recalled because retrieval is async-bounded and
+    this helper stays sync. Defaults to "" so non-memory call sites
+    (e.g. ``debug_api``) don't have to plumb it through.
     """
     observation = exchange.observe(persona.agent_id)
     news = build_news_view(news_bus, exchange, n=news_limit)
-    return TraderContext.build(persona=persona, observation=observation, news=news)
+    return TraderContext.build(
+        persona=persona, observation=observation, news=news, memory=memory
+    )

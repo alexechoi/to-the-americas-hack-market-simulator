@@ -6,6 +6,6 @@ and expose a scalar `pct_change_since` in the lean `NewsView`.
 """
 
 from .bus import NewsBus
-from .types import NewsHeadline
+from .types import SECONDS_PER_TICK, NewsHeadline
 
-__all__ = ["NewsBus", "NewsHeadline"]
+__all__ = ["SECONDS_PER_TICK", "NewsBus", "NewsHeadline"]

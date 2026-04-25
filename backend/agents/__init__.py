@@ -1,6 +1,12 @@
 """Trader agent layer: pydantic schemas + central inference utility."""
 
-from .llm import DEFAULT_MODEL, TraderAgent, build_trader_agent, default_model
+from .llm import (
+    DEFAULT_MODEL,
+    TraderAgent,
+    build_trader_agent,
+    default_model,
+    fresh_window_s,
+)
 from .observation import build_news_view, build_trader_context
 from .roster import default_roster
 from .schemas import (
@@ -42,4 +48,5 @@ __all__ = [
     "build_trader_context",
     "default_model",
     "default_roster",
+    "fresh_window_s",
 ]

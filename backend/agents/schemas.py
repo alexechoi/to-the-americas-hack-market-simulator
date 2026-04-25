@@ -117,17 +117,29 @@ class SpawnConfig(BaseModel):
 
 
 class NewsView(BaseModel):
-    """Lean LLM-facing news item: text + scalar price-move-since-arrival.
+    """Lean LLM-facing news item: text + freshness + price-move-since-arrival.
 
     Built lazily at observation time from a wire-format `NewsHeadline` plus the
     exchange's price history, so the LLM never sees the raw `tick_id` anchor.
-    `pct_change_since` is a percent (e.g. 1.25 for +1.25%).
+
+    Two freshness signals are surfaced together so the LLM can distinguish
+    breaking-but-not-yet-priced news from stale-already-digested news:
+
+    * ``seconds_ago``: wall-clock seconds since the headline landed on the bus.
+    * ``pct_change_since``: percent move in fair since the headline's anchor.
+      Near-zero on a fresh headline means "market hasn't reacted yet" (act
+      now); near-zero on a stale one means "non-event" — the renderer in
+      ``agents.llm`` flags ``[NEW]`` so the LLM can tell the difference.
     """
 
     model_config = ConfigDict(frozen=True)
 
     headline: str
     source: str
+    seconds_ago: float = Field(
+        ge=0.0,
+        description="Wall-clock seconds since this headline was published.",
+    )
     pct_change_since: float = Field(
         description="Percent change in fair since this headline's tick_id (e.g. 1.25 = +1.25%).",
     )
@@ -222,6 +234,14 @@ class TraderContext(BaseModel):
     market: MarketContextView
     account: AccountView
     news: list[NewsView] = Field(default_factory=list)
+    memory: str = Field(
+        default="",
+        description=(
+            "Pre-assembled, token-budgeted recall block from MuBit (lessons + facts "
+            "from this persona's past turns and the shared news log). Empty when the "
+            "memory layer is disabled or the recall returned nothing."
+        ),
+    )
 
     @classmethod
     def build(
@@ -230,12 +250,14 @@ class TraderContext(BaseModel):
         persona: TraderPersona,
         observation: AgentObservation,
         news: list[NewsView] | None = None,
+        memory: str = "",
     ) -> "TraderContext":
         return cls(
             persona=persona,
             market=MarketContextView.from_snapshot(observation.market),
             account=AccountView.from_snapshot(observation.account),
             news=list(news or []),
+            memory=memory,
         )
 
 

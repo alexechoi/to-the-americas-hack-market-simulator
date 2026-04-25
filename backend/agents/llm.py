@@ -24,7 +24,13 @@ from functools import lru_cache
 
 from pydantic_ai import Agent, RunContext
 
-from .schemas import TraderArchetype, TraderContext, TraderDecision, TraderPersona
+from .schemas import (
+    NewsView,
+    TraderArchetype,
+    TraderContext,
+    TraderDecision,
+    TraderPersona,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +67,20 @@ def default_model() -> str:
 
 _BASE_INSTRUCTIONS = (
     "You are a trader operating in a simulated single-asset market. "
-    "Each turn you receive: (a) public market state — fair, best_bid, best_ask, ladder, "
-    "recent prints; (b) your private account — current inventory and number of fills "
-    "(you do NOT see cash or P&L; size by lots, not by dollars); "
-    "(c) a list of recent news headlines.\n\n"
-    "Make ONE decisive choice and emit a TraderDecision with EXACTLY these fields:\n"
+    "Each turn you receive THREE inputs, in priority order:\n"
+    "  (1) RECENT NEWS — headlines that may move price. Treat these as your "
+    "PRIMARY decision driver, especially headlines tagged [NEW] (just published, "
+    "market has not yet repriced them). Stale headlines (pct_change_since well "
+    "above zero) are already partly digested; new headlines are not.\n"
+    "  (2) Public market state — fair, best_bid, best_ask, ladder, recent prints.\n"
+    "  (3) Your private account — current inventory and number of fills "
+    "(you do NOT see cash or P&L; size by lots, not by dollars).\n\n"
+    "DECISION POLICY: when a [NEW] headline is bullish for the asset, lean toward "
+    "buy; when bearish, lean toward sell — adjusted by your persona's risk and "
+    "horizon. 'hold' is appropriate when there is no fresh news AND the ladder "
+    "shows no clear edge. Do NOT default to 'hold' just because nothing changed "
+    "since last tick — re-read the news.\n\n"
+    "Emit a TraderDecision with EXACTLY these fields:\n"
     "  - action: 'buy', 'sell', or 'hold' — pick exactly one.\n"
     "  - quantity: 0 if action is 'hold'; otherwise a positive integer near 50 lots "
     "(this is the standard size every agent in this market uses). Stay close to ~50 "
@@ -76,11 +91,31 @@ _BASE_INSTRUCTIONS = (
     "      * If action is 'buy', set limit_price = market.best_ask (lift the offer).\n"
     "      * If action is 'sell', set limit_price = market.best_bid (hit the bid).\n"
     "      * If action is 'hold', set limit_price = market.fair (it is unused).\n"
-    "  - confidence: your self-rated conviction in [0.0, 1.0].\n"
+    "  - confidence: your self-rated conviction in [0.0, 1.0]. Bump higher when a "
+    "[NEW] headline directly supports your action; lower when you are reading "
+    "noise or fading a stale move.\n"
     "  - reasoning: ONE short sentence (≤ 240 chars, ~30 words) in your persona's "
-    "voice — this is rendered to humans as a thought bubble, so be concise and in-character.\n\n"
+    "voice — this is rendered to humans as a thought bubble, so be concise and "
+    "in-character. If a headline drove the call, NAME it (e.g. 'Lifting on the "
+    "earnings beat headline').\n\n"
     "Do not output multi-paragraph reasoning."
 )
+
+# Freshness window. A headline counts as ``[NEW]`` for a persona if it landed
+# within the last (tick_period_s × this multiplier) seconds — i.e. roughly the
+# persona's last two-and-a-half turns. Wider for slow personas (PENSION at 15s
+# tick → ~37s window) than for fast ones (HFT at 0.5s → ~1.25s) so every
+# persona gets at least one or two looks at a breaking headline before it
+# starts showing as stale.
+_FRESH_TICK_MULTIPLIER = 2.5
+
+
+def fresh_window_s(persona: TraderPersona) -> float:
+    """Wall-clock seconds during which a headline is rendered ``[NEW]`` for ``persona``.
+
+    Public so the swarm logging path can classify the same way the prompt does.
+    """
+    return persona.tick_period_s * _FRESH_TICK_MULTIPLIER
 
 _ARCHETYPE_NUDGES: dict[TraderArchetype, str] = {
     TraderArchetype.HFT: (
@@ -128,17 +163,63 @@ def _persona_block(persona: TraderPersona) -> str:
     return "\n".join(parts)
 
 
+def _format_news_line(idx: int, n: NewsView, *, fresh_window_s: float) -> str:
+    """One-line render of a NewsView with a [NEW]/[STALE] freshness flag.
+
+    Fresh headlines (``seconds_ago < fresh_window_s``) get a ``[NEW]`` tag and
+    suppress the misleading ``pct_change_since`` (which reads near 0% for
+    just-published headlines and would otherwise signal "no impact" to the LLM).
+    Stale headlines keep the ``pct_change_since`` so the LLM can see how much
+    of the move has already played out.
+    """
+    is_fresh = n.seconds_ago < fresh_window_s
+    age = f"{n.seconds_ago:.1f}s ago"
+    if is_fresh:
+        suffix = f"[NEW · {age} · market not yet repriced]"
+    else:
+        suffix = f"[STALE · {age} · fair {n.pct_change_since:+.2f}% since]"
+    return f"  [{idx}] {suffix} {n.source}: {n.headline}"
+
+
 def _runtime_block(ctx: TraderContext) -> str:
-    """Render the live market / account / news state into the system prompt.
+    """Render the live news / market / account state into the system prompt.
 
     Pydantic-AI does not auto-serialize ``deps`` into the LLM prompt — they are
     only accessible from tools and ``@instructions`` decorators. Without this
     block the model would never see best_bid / best_ask / fair / ladder and
     would hallucinate price levels (typically near round numbers like 100).
+
+    News is rendered FIRST (above market state) and tagged ``[NEW]`` /
+    ``[STALE]`` so the LLM treats fresh headlines as the primary decision
+    driver — see ``_BASE_INSTRUCTIONS``. The ordering also matters
+    behaviourally: prior layout had news at the bottom, immediately followed
+    by a strong "REMINDER: copy best_ask into limit_price" — the model
+    visibly anchored on that reminder and ignored news.
     """
+    persona = ctx.persona
     market = ctx.market
     account = ctx.account
     news = ctx.news
+
+    window_s = fresh_window_s(persona)
+
+    if news:
+        news_lines = "\n".join(
+            _format_news_line(i, n, fresh_window_s=window_s)
+            for i, n in enumerate(news, start=1)
+        )
+    else:
+        news_lines = "  (no recent headlines — base your call on market microstructure)"
+
+    # Memory block goes ABOVE news so the LLM treats prior lessons + your own
+    # recent reasoning as a frame for interpreting the latest headlines, not
+    # an afterthought. Suppressed entirely when MuBit is disabled or the recall
+    # returned nothing — we don't want a "(none)" line eating prompt tokens.
+    memory_block = (
+        f"=== Memory (lessons + recent activity) ===\n{ctx.memory.strip()}\n\n"
+        if ctx.memory.strip()
+        else ""
+    )
 
     bid_lines = (
         "\n".join(f"  {lvl.price:.4f} x {lvl.size}" for lvl in market.bids[:5])
@@ -156,15 +237,9 @@ def _runtime_block(ctx: TraderContext) -> str:
     else:
         prints = "  (none yet)"
 
-    if news:
-        news_lines = "\n".join(
-            f"  [{i}] {n.source}: {n.headline} (fair {n.pct_change_since:+.2f}% since)"
-            for i, n in enumerate(news, start=1)
-        )
-    else:
-        news_lines = "  (no recent headlines)"
-
     return (
+        f"{memory_block}"
+        f"=== Recent News (newest first) ===\n{news_lines}\n\n"
         f"=== Market State (tick {market.tick_id}, event_tick {market.event_tick}) ===\n"
         f"fair: {market.fair:.4f}\n"
         f"best_bid: {market.best_bid:.4f}\n"
@@ -176,9 +251,8 @@ def _runtime_block(ctx: TraderContext) -> str:
         f"agent_id: {account.agent_id}\n"
         f"inventory: {account.inventory}\n"
         f"n_fills: {account.n_fills}\n\n"
-        f"=== Recent News ===\n{news_lines}\n\n"
-        f"REMINDER: copy market.best_ask into limit_price for buy, market.best_bid "
-        f"into limit_price for sell. Do not invent a price."
+        f"REMINDER: weigh [NEW] news first, then microstructure. For limit_price "
+        f"copy market.best_ask on buy, market.best_bid on sell. Do not invent a price."
     )
 
 
