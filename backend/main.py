@@ -1,4 +1,3 @@
-import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -7,22 +6,18 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from auth import FirebaseUser, OptionalFirebaseUser
-from exchange_api import router as exchange_router
-from firebase_service import auto_initialize
-from notifications import router as notifications_router
-from runtime import runtime as exchange_runtime
-
-# Load environment variables from .env file
+# .env must load before observability so LOGFIRE_TOKEN / ENVIRONMENT are visible.
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+from auth import FirebaseUser, OptionalFirebaseUser  # noqa: E402
+from exchange_api import router as exchange_router  # noqa: E402
+from firebase_service import auto_initialize  # noqa: E402
+from notifications import router as notifications_router  # noqa: E402
+from observability import configure_observability, instrument_app  # noqa: E402
+from runtime import runtime as exchange_runtime  # noqa: E402
 
-# Initialize Firebase on startup
+configure_observability()
+
 auto_initialize()
 
 
@@ -42,6 +37,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+instrument_app(app)
 
 # CORS configuration
 allowed_origins = os.getenv(
