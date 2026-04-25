@@ -1,11 +1,13 @@
 """Default roster of trader personas spawned at backend startup.
 
-Hand-curated cohort of 35 personas spread across the four archetypes. Each
+Hand-curated cohort of 65 personas spread across the four archetypes, with the
+"slow" tier (retail + pension) intentionally over-represented so the order book
+has steady patient flow against the algo and discretionary cohorts. Each
 persona has a distinct risk tolerance, time horizon, cadence, and backstory so
 the swarm panel reads as a *crowd* of opinions rather than four template clones.
 
 Cadence guideline (rough seconds between turns; jittered ±20% in `swarm.py`):
-    HFT 4–8 | HEDGE_FUND 25–45 | RETAIL 40–80 | PENSION_FUND 120–220
+    HFT 4–8 | HEDGE_FUND 25–50 | RETAIL 40–110 | PENSION_FUND 120–300
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from .schemas import RiskTolerance, TimeHorizon, TraderArchetype, TraderPersona
 
 
 def default_roster() -> list[TraderPersona]:
-    """Return a fresh 35-persona swarm. Called once at app startup."""
+    """Return a fresh 65-persona swarm. Called once at app startup."""
     return [
         # ---- HFT · sub-second algos -------------------------------------
         TraderPersona(
@@ -252,6 +254,19 @@ def default_roster() -> list[TraderPersona]:
                 "into convex payoffs when realised vol cracks the regime."
             ),
         ),
+        TraderPersona(
+            agent_id="hf-11",
+            display_name="Cassandra Yew",
+            archetype=TraderArchetype.HEDGE_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=50.0,
+            max_order_size=260,
+            backstory=(
+                "Concentrated value PM. Holds 12 names for 3+ years, ignores "
+                "tape noise, only trades when the multi-year IRR re-rates."
+            ),
+        ),
         # ---- Retail · slower app traders --------------------------------
         TraderPersona(
             agent_id="retail-01",
@@ -383,6 +398,149 @@ def default_roster() -> list[TraderPersona]:
                 "month, holds for 'the long term', sells when bored."
             ),
         ),
+        TraderPersona(
+            agent_id="retail-11",
+            display_name="Eunice Wong",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=85.0,
+            max_order_size=12,
+            backstory=(
+                "Bogle-head. Three-fund portfolio, rebalances on her birthday, "
+                "sees red candles as a discount on lifetime cost-basis."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-12",
+            display_name="Frederik Holm",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=90.0,
+            max_order_size=15,
+            backstory=(
+                "Nordic patient buy-and-holder. Tops up quarterly, never sells "
+                "a winner, treats volatility as background weather."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-13",
+            display_name="Pearl Adekoya",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=95.0,
+            max_order_size=10,
+            backstory=(
+                "Gold-bug doomsday saver. Trickles cash into hard-asset proxies, "
+                "trims equity on euphoria, sleeps soundly through drawdowns."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-14",
+            display_name="Dr. Marisol Reyes",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=100.0,
+            max_order_size=14,
+            backstory=(
+                "Suburban dentist. Funds the practice 401(k) on autopilot, only "
+                "checks the brokerage between patients on rainy afternoons."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-15",
+            display_name="Mr. Henley",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=105.0,
+            max_order_size=8,
+            backstory=(
+                "Public-school history teacher. ESG screen, low turnover, "
+                "treats his Roth like a quiet 30-year savings bond."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-16",
+            display_name="Otis Brennan",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=85.0,
+            max_order_size=22,
+            backstory=(
+                "Slow swing-trader. Holds positions for weeks on a 200-day "
+                "moving-average rule, bored by daily noise, patient on entries."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-17",
+            display_name="Mrs. Doreen Atherton",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=110.0,
+            max_order_size=10,
+            backstory=(
+                "Widowed retiree on a dividend-income ladder. Sells nothing "
+                "that pays her a check; reads the annual report by the fireplace."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-18",
+            display_name="Walt Schoeneberg",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=90.0,
+            max_order_size=18,
+            backstory=(
+                "Retired CPA running a covered-call sleeve. Rolls monthly, "
+                "harvests theta, refuses to chase moves between expiries."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-19",
+            display_name="Sanjay Mehta",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=95.0,
+            max_order_size=12,
+            backstory=(
+                "Engineer-dad funding two 529 plans. Auto-DCAs on the 1st and "
+                "15th, ignores the tape unless a headline threatens his timeline."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-20",
+            display_name="Marlene Petrov",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=100.0,
+            max_order_size=11,
+            backstory=(
+                "Real-estate broker dabbling in equities. Treats stocks like "
+                "rentals — buys for cash flow, holds for years, fixes nothing fast."
+            ),
+        ),
+        TraderPersona(
+            agent_id="retail-21",
+            display_name="Kofi Boateng",
+            archetype=TraderArchetype.RETAIL,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=80.0,
+            max_order_size=20,
+            backstory=(
+                "Mid-career SWE on RSU autopilot. Sells vested stock on a "
+                "fixed schedule into a target-date fund; never times the market."
+            ),
+        ),
         # ---- Pension fund · slow long-term allocators -------------------
         TraderPersona(
             agent_id="pension-01",
@@ -473,6 +631,240 @@ def default_roster() -> list[TraderPersona]:
             backstory=(
                 "Liability-driven actuary. Matches duration to obligations; "
                 "won't trade unless the funded ratio asks her to."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-08",
+            display_name="Beatrice Whitcombe",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=240.0,
+            max_order_size=380,
+            backstory=(
+                "UK DB-pension trustee. Gilts-heavy book, suspicious of "
+                "equities, only adds risk when committee minutes demand it."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-09",
+            display_name="Tomás Aguilar",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=170.0,
+            max_order_size=480,
+            backstory=(
+                "Latam corporate-pension allocator. Inflation-aware; tilts to "
+                "real assets, rebalances out of equities when CPI prints hot."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-10",
+            display_name="Ulrich Steinmetz",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=210.0,
+            max_order_size=420,
+            backstory=(
+                "German Versorgungswerk allocator. Strict policy bands, "
+                "deutsche-Gründlichkeit on rebalancing, allergic to drift."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-11",
+            display_name="Aroha Te Whata",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=180.0,
+            max_order_size=550,
+            backstory=(
+                "NZ Super-style sovereign allocator. Counter-cyclical mandate; "
+                "buys aggressively into deep drawdowns, trims into froth."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-12",
+            display_name="Walter Pemberton",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=260.0,
+            max_order_size=300,
+            backstory=(
+                "Old-school trust officer. Quotes Graham, distrusts screens, "
+                "writes a memo before any change to a client's allocation."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-13",
+            display_name="Sunita Murthy",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=155.0,
+            max_order_size=460,
+            backstory=(
+                "Indian provident-fund allocator. Demographic tailwinds in her "
+                "DNA; quietly accumulates on weakness, never panics on news."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-14",
+            display_name="Hugo Tremblay",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=190.0,
+            max_order_size=540,
+            backstory=(
+                "Canadian provincial-pension PM. Maple-model believer; pairs "
+                "public equities with private holdings, slow to move either book."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-15",
+            display_name="Genevieve Pollard",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=170.0,
+            max_order_size=510,
+            backstory=(
+                "Australian super-fund allocator. Lifecycle glide-path on the "
+                "default option; quarterly rebalance windows are her whole calendar."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-16",
+            display_name="Father Lucien Marchetti",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=250.0,
+            max_order_size=320,
+            backstory=(
+                "Catholic-charity endowment trustee. Hard exclusion list, "
+                "perpetual horizon, prays before the investment-committee vote."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-17",
+            display_name="Harriet Vandermeer",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=230.0,
+            max_order_size=580,
+            backstory=(
+                "Insurance general-account PM. Asset-liability matched to "
+                "policy reserves; treats equity sleeves as a slow surplus dial."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-18",
+            display_name="Kenji Watanabe",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=270.0,
+            max_order_size=620,
+            backstory=(
+                "GPIF-style sovereign allocator. Mandate-bound to a fixed "
+                "policy mix; rebalances on bands, ignores everything else."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-19",
+            display_name="Augusta Pemberton-Ng",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=200.0,
+            max_order_size=440,
+            backstory=(
+                "Multi-generation family-office CIO. Thinks in 30-year compounding "
+                "windows; trades only when the cap-table or thesis materially shifts."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-20",
+            display_name="Reverend Ada Whitlock",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=280.0,
+            max_order_size=280,
+            backstory=(
+                "Church-endowment steward. Spending-rule discipline, low "
+                "turnover, treats a 5% drawdown as a budget question, not a trade."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-21",
+            display_name="Sigrid Halvorsen",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=185.0,
+            max_order_size=600,
+            backstory=(
+                "Norwegian SWF-style allocator. Diversified across thousands "
+                "of names; uses drawdowns as a chance to top up, never to flee."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-22",
+            display_name="Howard Beckwith III",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=240.0,
+            max_order_size=400,
+            backstory=(
+                "US state-pension trustee. Cautious, headline-averse, "
+                "consults two consultants before changing a basis point of policy."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-23",
+            display_name="Élise Dauphin",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=210.0,
+            max_order_size=470,
+            backstory=(
+                "French paritaire-fund allocator. Inflation-linked liability "
+                "lens; tilts to real assets and high-quality dividend payers."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-24",
+            display_name="Thaddeus Krieg",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.CONSERVATIVE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=300.0,
+            max_order_size=260,
+            backstory=(
+                "Museum-endowment manager. Inter-generational mandate, glacial "
+                "cadence; would rather miss a rally than print the wrong memo."
+            ),
+        ),
+        TraderPersona(
+            agent_id="pension-25",
+            display_name="Wei-Lin Tan",
+            archetype=TraderArchetype.PENSION_FUND,
+            risk_tolerance=RiskTolerance.MODERATE,
+            time_horizon=TimeHorizon.LONG_TERM,
+            tick_period_s=175.0,
+            max_order_size=560,
+            backstory=(
+                "Singaporean GIC-style allocator. Contrarian on consensus, "
+                "scales into multi-year drawdowns when peers are derisking."
             ),
         ),
     ]

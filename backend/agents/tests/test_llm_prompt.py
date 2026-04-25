@@ -164,6 +164,67 @@ def test_runtime_block_flags_fresh_headlines_as_new():
     assert "market not yet repriced" in block
 
 
+def test_runtime_block_surfaces_pct_on_new_headline_when_market_already_ran():
+    """A fresh headline whose price has ALREADY moved (faster agents acted
+    before this persona's turn) must surface the move so the LLM can see
+    the dissonance: headline is new-to-me, but the trade is partway done.
+
+    This is what drives divergent behavior across archetypes — RETAIL sees
+    a +0.8% [NEW] move and FOMOs harder; HEDGE_FUND sees the same +0.8%
+    and starts thinking about fading the rip.
+    """
+    fresh_but_running = NewsView(
+        headline="Earnings beat smashes consensus",
+        source="reuters",
+        seconds_ago=0.5,  # well inside the 2.5s fresh window
+        pct_change_since=0.80,
+    )
+    block = _runtime_block(_ctx(news=[fresh_but_running]))
+    assert "Earnings beat" in block
+    assert "[NEW" in block
+    assert "+0.80%" in block
+    assert "already moved" in block
+    # The "not yet repriced" framing is wrong here — it would mislead the LLM
+    # into thinking the trade is still untouched when it's already running.
+    assert "market not yet repriced" not in block
+
+
+def test_runtime_block_keeps_not_yet_repriced_for_tiny_fresh_moves():
+    """Sub-threshold moves on fresh headlines (Gaussian fair noise — a few
+    bp/tick) still render as 'not yet repriced'. We don't want the LLM
+    chasing 0.1% wiggles as if they were an early read.
+    """
+    fresh_small = NewsView(
+        headline="Modest revision to forecast",
+        source="reuters",
+        seconds_ago=0.5,
+        pct_change_since=0.10,  # below the 0.25% threshold
+    )
+    block = _runtime_block(_ctx(news=[fresh_small]))
+    assert "[NEW" in block
+    assert "market not yet repriced" in block
+    assert "+0.10%" not in block
+    assert "already moved" not in block
+
+
+def test_runtime_block_surfaces_pct_on_new_headline_for_against_moves():
+    """The 'already moved' surface uses |pct|, so a fresh BULLISH headline
+    that moved fair against expectation (e.g. -0.6%) still shows. That's
+    the strongest signal of all — the market disagrees with the wire — and
+    HEDGE_FUNDs are explicitly told to side with price in that case.
+    """
+    fresh_against = NewsView(
+        headline="CEO unexpectedly resigns",
+        source="bloomberg",
+        seconds_ago=0.5,
+        pct_change_since=-0.60,
+    )
+    block = _runtime_block(_ctx(news=[fresh_against]))
+    assert "[NEW" in block
+    assert "-0.60%" in block
+    assert "already moved" in block
+
+
 def test_runtime_block_handles_empty_news():
     block = _runtime_block(_ctx(news=[]))
     assert "no recent headlines" in block

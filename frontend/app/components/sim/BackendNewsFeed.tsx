@@ -28,6 +28,44 @@ export function BackendNewsFeed({
     return () => clearInterval(id);
   }, []);
 
+  // Snapshot the publish-time fair for each headline the first time we can
+  // resolve it. The fair-price ring in `useExchange` only retains ~2min of
+  // history (historyCap = 600 @ 5Hz), so without this cache the pct anchor
+  // would silently fall off the edge of the buffer once a headline aged out
+  // and the indicator would degrade to "—". Keyed by headline_id; bounded by
+  // the parent's headline cap via the prune step below.
+  const [anchors, setAnchors] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+
+  // Re-run on every snapshot (currentFair changes at the SSE rate) so we can
+  // retry resolution if `priceAt` was empty when the headline first landed.
+  // Returns the same reference when nothing changed so React bails the update.
+  useEffect(() => {
+    setAnchors((prev) => {
+      let next: Map<string, number> | null = null;
+      const live = new Set<string>();
+      for (const h of headlines) {
+        live.add(h.headline_id);
+        if (!prev.has(h.headline_id)) {
+          const resolved = priceAt(h.tick_id);
+          if (resolved !== null) {
+            next ??= new Map(prev);
+            next.set(h.headline_id, resolved);
+          }
+        }
+      }
+      // Drop anchors whose headline has rolled out of the parent's buffer.
+      for (const id of prev.keys()) {
+        if (!live.has(id)) {
+          next ??= new Map(prev);
+          next.delete(id);
+        }
+      }
+      return next ?? prev;
+    });
+  }, [headlines, priceAt, currentFair]);
+
   if (!headlines.length) {
     return (
       <div className="flex h-full items-center justify-center px-4 py-6 text-center text-xs text-[var(--color-fg-faint)]">
@@ -39,7 +77,12 @@ export function BackendNewsFeed({
   return (
     <ul className="divide-y divide-[var(--color-line)]">
       {headlines.map((h, idx) => {
-        const anchor = priceAt(h.tick_id);
+        // Read the publish-time fair from the anchor cache. May be undefined
+        // for one render after a headline first arrives (we resolve in the
+        // effect above), in which case pct degrades to "—" until the cache
+        // lands — same UX as before, just no longer terminal once the price
+        // ring rolls past `h.tick_id`.
+        const anchor = anchors.get(h.headline_id) ?? null;
         const pct =
           anchor !== null && anchor !== 0 && currentFair !== null
             ? ((currentFair - anchor) / anchor) * 100

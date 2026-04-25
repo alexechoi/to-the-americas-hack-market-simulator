@@ -69,17 +69,26 @@ _BASE_INSTRUCTIONS = (
     "You are a trader operating in a simulated single-asset market. "
     "Each turn you receive THREE inputs, in priority order:\n"
     "  (1) RECENT NEWS — headlines that may move price. Treat these as your "
-    "PRIMARY decision driver, especially headlines tagged [NEW] (just published, "
-    "market has not yet repriced them). Stale headlines (pct_change_since well "
-    "above zero) are already partly digested; new headlines are not.\n"
+    "PRIMARY decision driver, especially headlines tagged [NEW] (just published). "
+    "Each headline carries a move-since-anchor: '[NEW · already moved +X%]' "
+    "means a fresh headline whose price has ALREADY started running (faster "
+    "agents acted before you), 'market not yet repriced' means the trade is "
+    "still untouched, and '[STALE · fair +X% since]' means the move is partly "
+    "or fully digested.\n"
     "  (2) Public market state — fair, best_bid, best_ask, ladder, recent prints.\n"
     "  (3) Your private account — current inventory and number of fills "
     "(you do NOT see cash or P&L; size by lots, not by dollars).\n\n"
     "DECISION POLICY: when a [NEW] headline is bullish for the asset, lean toward "
     "buy; when bearish, lean toward sell — adjusted by your persona's risk and "
-    "horizon. 'hold' is appropriate when there is no fresh news AND the ladder "
-    "shows no clear edge. Do NOT default to 'hold' just because nothing changed "
-    "since last tick — re-read the news.\n\n"
+    "horizon. ALSO weigh the move-since-headline: a move that AGREES with the "
+    "headline (fair up on bullish news, down on bearish) means part of the "
+    "trade is already priced — your archetype decides whether to CHASE harder, "
+    "FADE the move, or stand aside (see persona block). A move that DISAGREES "
+    "(fair down on bullish news, up on bearish) means the market read the "
+    "headline differently than the surface text — usually side with price, "
+    "not the headline. 'hold' is appropriate when there is no fresh news AND "
+    "the ladder shows no clear edge. Do NOT default to 'hold' just because "
+    "nothing changed since last tick — re-read the news.\n\n"
     "Emit a TraderDecision with EXACTLY these fields:\n"
     "  - action: 'buy', 'sell', or 'hold' — pick exactly one.\n"
     "  - quantity: 0 if action is 'hold'; otherwise a positive integer near 50 lots "
@@ -108,6 +117,15 @@ _BASE_INSTRUCTIONS = (
 # starts showing as stale.
 _FRESH_TICK_MULTIPLIER = 2.5
 
+# Move-since-anchor threshold for [NEW] headlines, in percent. Below this we
+# treat the move as Gaussian fair noise (a few bp/tick) and render
+# "market not yet repriced" — the trade is still up for grabs. Above this,
+# the price has already started running (faster agents acted on the headline
+# before slower personas got their turn) and we surface the percent so the
+# slow persona can decide whether to chase, fade, or stand aside per their
+# archetype. Set conservatively low so even a single HFT lift shows up.
+_FRESH_MOVE_THRESHOLD_PCT = 0.25
+
 
 def fresh_window_s(persona: TraderPersona) -> float:
     """Wall-clock seconds during which a headline is rendered ``[NEW]`` for ``persona``.
@@ -120,19 +138,29 @@ def fresh_window_s(persona: TraderPersona) -> float:
 _ARCHETYPE_NUDGES: dict[TraderArchetype, str] = {
     TraderArchetype.HFT: (
         "You react in microseconds to micro-structure: ladder imbalance, recent prints, "
-        "spread compression. You rarely hold inventory overnight; you scalp small edges."
+        "spread compression. You scalp small edges regardless of how far a headline has "
+        "already moved — you're not picking sides on the macro print, you're picking "
+        "sides on the next 50ms of order flow. You rarely hold inventory overnight."
     ),
     TraderArchetype.RETAIL: (
         "You're a retail investor. News headlines and recent price action drive you "
-        "more than fundamentals. You're prone to FOMO on big moves and panic on red candles."
+        "more than fundamentals. Big already-running moves trigger FOMO: when a bullish "
+        "headline has already moved fair more than ~1%, you want to CHASE HARDER, not "
+        "fade. When the move turns against the headline you panic and capitulate. You "
+        "are anti-contrarian by design."
     ),
     TraderArchetype.HEDGE_FUND: (
-        "You hunt mispricing. You go contrarian when sentiment overshoots and you size "
-        "into convictions. You weigh news against your prior thesis."
+        "You hunt mispricing. Once a headline has already moved fair more than ~1.5% in "
+        "its expected direction, the easy money is gone — you FADE the move (sell into "
+        "rips on bullish prints, buy into flushes on bearish prints) with moderate "
+        "conviction. If price disagrees with the headline (fair fell on bullish news), "
+        "side with price — the tape is smarter than the wire."
     ),
     TraderArchetype.PENSION_FUND: (
-        "You allocate slow capital. You ignore intraday noise and only react to news that "
-        "changes the multi-year cash-flow story. You prefer holding through volatility."
+        "You allocate slow capital. You ignore intraday noise — anything that has moved "
+        "fair less than ~2% does not change your stance. Only react to headlines that "
+        "credibly change the multi-year cash-flow story, and even then size lightly. "
+        "You prefer holding through volatility."
     ),
 }
 
@@ -154,16 +182,29 @@ def _persona_block(persona: TraderPersona) -> str:
 def _format_news_line(idx: int, n: NewsView, *, fresh_window_s: float) -> str:
     """One-line render of a NewsView with a [NEW]/[STALE] freshness flag.
 
-    Fresh headlines (``seconds_ago < fresh_window_s``) get a ``[NEW]`` tag and
-    suppress the misleading ``pct_change_since`` (which reads near 0% for
-    just-published headlines and would otherwise signal "no impact" to the LLM).
-    Stale headlines keep the ``pct_change_since`` so the LLM can see how much
-    of the move has already played out.
+    Three rendering modes, picked by freshness × magnitude:
+
+    * ``[NEW · market not yet repriced]`` — fresh headline, |pct| below
+      ``_FRESH_MOVE_THRESHOLD_PCT`` (treated as Gaussian fair noise). The
+      trade is still up for grabs; the LLM should weigh the headline
+      direction, not the percent.
+    * ``[NEW · fair already moved +X%]`` — fresh headline but the price has
+      already started running (a faster persona acted before this one's
+      turn). Surface the percent so slow personas can see the dissonance:
+      headline is "new to me" but the market is partway repriced. Drives
+      divergent behavior — RETAIL chases, HEDGE_FUND fades, etc.
+    * ``[STALE · fair +X% since]`` — past the freshness window; the move
+      has had time to play out. Always show the percent.
     """
     is_fresh = n.seconds_ago < fresh_window_s
     age = f"{n.seconds_ago:.1f}s ago"
     if is_fresh:
-        suffix = f"[NEW · {age} · market not yet repriced]"
+        if abs(n.pct_change_since) >= _FRESH_MOVE_THRESHOLD_PCT:
+            suffix = (
+                f"[NEW · {age} · fair already moved {n.pct_change_since:+.2f}% since]"
+            )
+        else:
+            suffix = f"[NEW · {age} · market not yet repriced]"
     else:
         suffix = f"[STALE · {age} · fair {n.pct_change_since:+.2f}% since]"
     return f"  [{idx}] {suffix} {n.source}: {n.headline}"

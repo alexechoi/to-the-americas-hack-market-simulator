@@ -34,8 +34,9 @@ const TOOLTIP_W = 260;
 
 /**
  * Each agent is a fixed point on a packed grid, clustered by reaction-speed
- * tier. When an agent decides something the matching dot pulses in its action
- * colour (BUY=up, SELL=down, HOLD=muted) and an orbit ring appears for ~800ms.
+ * tier. When an agent decides something the matching dot adopts its action
+ * colour (BUY=up, SELL=down, HOLD=base) and holds that tint until the agent's
+ * next decision; the orbit ring + size bump pulse for ~800ms on top.
  * Layout is resize-aware so the swarm fills its container in tall, wide, or
  * square panels. Hovering a dot reveals a tooltip with the persona and its
  * latest decision.
@@ -150,9 +151,11 @@ export function AgentSwarm({
           ctx.stroke();
         }
 
-        // dot
+        // dot — keep the BUY/SELL tint until this agent's next decision so a
+        // glance still reads the most recent side; the size bump only lasts
+        // for the 800ms pulse window above.
         ctx.beginPath();
-        ctx.fillStyle = pulse > 0 ? sideColor : baseColor;
+        ctx.fillStyle = last ? sideColor : baseColor;
         ctx.arc(
           cx,
           cy,
