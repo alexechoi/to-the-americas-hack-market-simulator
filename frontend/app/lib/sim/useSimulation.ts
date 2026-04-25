@@ -43,7 +43,7 @@ export function useSimulation(options: UseSimulationOptions = {}) {
     () => ({
       pause: () => engineRef.current?.setPaused(true),
       resume: () => engineRef.current?.setPaused(false),
-      injectHeadline: (title: string, sentiment: number) =>
+      injectHeadline: (title: string, sentiment?: number) =>
         engineRef.current?.injectHeadline(title, sentiment),
     }),
     [],

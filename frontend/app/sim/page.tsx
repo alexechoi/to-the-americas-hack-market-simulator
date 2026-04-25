@@ -8,7 +8,6 @@ import { AgentSwarm } from "@/app/components/sim/AgentSwarm";
 import { HeadlineInjector } from "@/app/components/sim/HeadlineInjector";
 import { OrderTape } from "@/app/components/sim/OrderTape";
 import { PriceChart } from "@/app/components/sim/PriceChart";
-import { ScenarioTable } from "@/app/components/sim/ScenarioTable";
 import { Button } from "@/app/components/ui/Button";
 import { LiveDot } from "@/app/components/ui/LiveDot";
 import { Logo } from "@/app/components/ui/Logo";
@@ -179,7 +178,7 @@ export default function SimPage() {
           </Panel>
         </div>
 
-        {/* Right column · inject + reasoning + scenarios */}
+        {/* Right column · inject + reasoning */}
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
           <Panel title="Inject headline" caption="⌘↵" className="shrink-0">
             <HeadlineInjector onInject={controls.injectHeadline} />
@@ -194,16 +193,6 @@ export default function SimPage() {
             bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
           >
             <AgentReasoning decisions={snapshot?.decisions ?? []} />
-          </Panel>
-
-          <Panel
-            title="Scenarios"
-            caption="population dispersion"
-            right={<Tag tone="accent">Sellable</Tag>}
-            flush
-            className="shrink-0"
-          >
-            <ScenarioTable rows={snapshot?.scenarios ?? []} compact />
           </Panel>
         </div>
       </main>

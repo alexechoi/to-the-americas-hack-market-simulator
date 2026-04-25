@@ -247,19 +247,19 @@ export class MarketEngine {
     this.emit();
   }
 
-  injectHeadline(title: string, sentiment: number, source = "user") {
+  injectHeadline(title: string, sentiment?: number, source = "user") {
+    const score = sentiment ?? scoreHeadlineSentiment(title);
     const headline: NewsHeadline = {
       id: `n-${Date.now()}`,
       ts: Date.now(),
       source,
       title,
-      sentiment,
+      sentiment: score,
       injected: true,
     };
     const news = [headline, ...this.snapshot.news].slice(0, 40);
     this.snapshot = { ...this.snapshot, news };
-    // Send a shock through the agent population on next tick.
-    this.shockSentiment = sentiment;
+    this.shockSentiment = score;
     this.shockExpiry = Date.now() + 6500;
     this.emit();
   }
@@ -440,6 +440,88 @@ export class MarketEngine {
       expectedMove: s.expectedMove + (price - 142) * 0,
     }));
   }
+}
+
+/**
+ * Lightweight keyword-driven sentiment scorer used when the UI no longer
+ * exposes a manual sentiment slider. Stand-in for an LLM-graded score; keeps
+ * the demo reactive to typed headlines.
+ */
+function scoreHeadlineSentiment(title: string): number {
+  const POSITIVE = [
+    "beat",
+    "beats",
+    "raise",
+    "raised",
+    "raises",
+    "deal",
+    "agreement",
+    "partnership",
+    "approval",
+    "approved",
+    "launch",
+    "launches",
+    "record",
+    "growth",
+    "grows",
+    "wins",
+    "win",
+    "upgrade",
+    "upgraded",
+    "surge",
+    "rally",
+    "expands",
+    "buyback",
+    "dividend",
+    "strong",
+    "tops",
+  ];
+  const NEGATIVE = [
+    "miss",
+    "misses",
+    "cut",
+    "cuts",
+    "downgrade",
+    "downgraded",
+    "probe",
+    "lawsuit",
+    "investigation",
+    "ban",
+    "bans",
+    "curb",
+    "curbs",
+    "restrict",
+    "restricts",
+    "fine",
+    "fined",
+    "warning",
+    "warns",
+    "loss",
+    "losses",
+    "drop",
+    "drops",
+    "fall",
+    "falls",
+    "delay",
+    "delays",
+    "recall",
+    "recalls",
+    "hawkish",
+    "weak",
+    "slump",
+    "halt",
+    "fraud",
+  ];
+  const tokens = title.toLowerCase().match(/[a-z]+/g) ?? [];
+  let pos = 0;
+  let neg = 0;
+  for (const t of tokens) {
+    if (POSITIVE.includes(t)) pos += 1;
+    else if (NEGATIVE.includes(t)) neg += 1;
+  }
+  if (pos === 0 && neg === 0) return 0;
+  const raw = (pos - neg) / Math.max(1, pos + neg);
+  return clamp(raw * 0.7, -0.85, 0.85);
 }
 
 function clamp(v: number, lo: number, hi: number) {

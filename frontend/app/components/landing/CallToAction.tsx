@@ -11,7 +11,6 @@ export function CallToAction() {
       <WarpBackground intensity={0.7} speed={2} grid={false} />
 
       <div className="relative z-10 mx-auto max-w-[1440px] px-6 py-32 md:px-10">
-
         <motion.h2
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
