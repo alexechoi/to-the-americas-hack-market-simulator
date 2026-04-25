@@ -54,7 +54,7 @@ export function Hero() {
               className="mt-8 max-w-2xl text-base leading-relaxed text-[var(--color-fg-muted)] md:text-lg"
             >
               We do not predict markets. We model the predators inside them. A
-              population of trader personas — HFT, macro, retail, gamma, CTA —
+              population of trader personas - HFT, macro, retail, gamma, CTA -
               breathing in real time, reacting to every headline you can
               imagine, before it ships.
             </motion.p>
@@ -83,9 +83,6 @@ export function Hero() {
               >
                 Read the manifesto
               </Link>
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-fg-faint)] sm:ml-2">
-                Live · v0.1 · London
-              </span>
             </motion.div>
           </div>
 

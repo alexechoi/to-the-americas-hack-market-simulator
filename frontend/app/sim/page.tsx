@@ -1,22 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { AgentReasoning } from "@/app/components/sim/AgentReasoning";
 import { AgentSwarm } from "@/app/components/sim/AgentSwarm";
-import { CohortLegend } from "@/app/components/sim/CohortLegend";
 import { HeadlineInjector } from "@/app/components/sim/HeadlineInjector";
-import { NewsFeed } from "@/app/components/sim/NewsFeed";
 import { OrderTape } from "@/app/components/sim/OrderTape";
 import { PriceChart } from "@/app/components/sim/PriceChart";
-import { ScenarioTable } from "@/app/components/sim/ScenarioTable";
-import { TickerStrip } from "@/app/components/sim/TickerStrip";
 import { Button } from "@/app/components/ui/Button";
-import { Footer } from "@/app/components/ui/Footer";
-import { Header } from "@/app/components/ui/Header";
 import { LiveDot } from "@/app/components/ui/LiveDot";
+import { Logo } from "@/app/components/ui/Logo";
 import { Panel } from "@/app/components/ui/Panel";
-import { Stat } from "@/app/components/ui/Stat";
 import { Tag } from "@/app/components/ui/Tag";
 import { useSimulation } from "@/app/lib/sim/useSimulation";
 
@@ -55,197 +50,171 @@ export default function SimPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-      <TickerStrip />
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg)] text-[var(--color-fg)]">
+      {/* Compact instrument bar — replaces site header on /sim */}
+      <header className="flex shrink-0 items-center gap-6 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-2.5">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-[var(--color-fg)] transition-colors hover:text-[var(--color-accent)]"
+          aria-label="Back to Animal Spirits home"
+        >
+          <Logo size={16} />
+          <span className="text-sm font-semibold tracking-tight">
+            Animal Spirits
+          </span>
+        </Link>
 
-      {/* Sticky instrument bar */}
-      <div className="sticky top-14 z-20 border-b border-[var(--color-line)] bg-[color-mix(in_oklab,var(--color-bg)_92%,transparent)] backdrop-blur">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-8 gap-y-3 px-6 py-3">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-base font-semibold tracking-tight">
-              {snapshot?.ticker ?? "NVDA"}
-              <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
-                NVIDIA Corp · single-name
-              </span>
-            </h1>
-          </div>
-          <div className="flex items-baseline gap-2 font-mono tabular-nums">
-            <span className="text-2xl tracking-tight text-[var(--color-fg)]">
-              {snapshot?.price.toFixed(2) ?? "—"}
-            </span>
-            <span
-              className="text-sm"
-              style={{
-                color: change >= 0 ? "var(--color-up)" : "var(--color-down)",
-              }}
-            >
-              {change >= 0 ? "+" : ""}
-              {change.toFixed(2)} ({changePct >= 0 ? "+" : ""}
-              {changePct.toFixed(2)}%)
-            </span>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <LiveDot
-              tone={paused ? "paused" : "live"}
-              label={paused ? "Paused" : `Live · ${cohortStats.tps}/s`}
-            />
-            <Tag tone="muted">cycle {snapshot?.cycle ?? 0}</Tag>
-            <Button variant="outline" size="sm" onClick={togglePause}>
-              {paused ? "Resume" : "Pause"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => window.location.reload()}
-            >
-              Reset
-            </Button>
-          </div>
+        <div className="hidden h-6 w-px bg-[var(--color-line)] sm:block" />
+
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-base font-semibold tracking-tight">
+            {snapshot?.ticker ?? "NVDA"}
+          </h1>
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)] md:inline">
+            NVIDIA Corp · single-name
+          </span>
         </div>
-      </div>
 
-      {/* Workspace grid */}
-      <main className="mx-auto w-full max-w-[1440px] flex-1 px-6 py-6">
-        <div className="grid grid-cols-12 gap-4">
-          {/* Left column · cohorts */}
-          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4">
-            <Panel
-              title="Population"
-              caption={`${cohortStats.agents} agents`}
-              right={<Tag tone="muted">8 archetypes</Tag>}
-              flush
-              bodyClassName=""
-            >
-              <CohortLegend
-                agents={snapshot?.agents ?? []}
-                decisions={snapshot?.decisions ?? []}
-                referenceTs={snapshot?.simulatedAt ?? 0}
+        <div className="flex items-baseline gap-2 font-mono tabular-nums">
+          <span className="text-xl tracking-tight text-[var(--color-fg)]">
+            {snapshot?.price.toFixed(2) ?? "—"}
+          </span>
+          <span
+            className="text-xs"
+            style={{
+              color: change >= 0 ? "var(--color-up)" : "var(--color-down)",
+            }}
+          >
+            {change >= 0 ? "+" : ""}
+            {change.toFixed(2)} ({changePct >= 0 ? "+" : ""}
+            {changePct.toFixed(2)}%)
+          </span>
+        </div>
+
+        <div className="ml-auto flex items-center gap-5">
+          <InlineStat label="Agents" value={cohortStats.agents} />
+          <InlineStat label="Dec/s" value={cohortStats.tps} />
+          <InlineStat label="Headlines" value={cohortStats.news} />
+          <InlineStat label="Cycle" value={snapshot?.cycle ?? 0} />
+
+          <div className="hidden h-6 w-px bg-[var(--color-line)] sm:block" />
+
+          <LiveDot
+            tone={paused ? "paused" : "live"}
+            label={paused ? "Paused" : "Live"}
+          />
+          <Tag tone="muted">tickMs 280</Tag>
+          <Button variant="outline" size="sm" onClick={togglePause}>
+            {paused ? "Resume" : "Pause"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
+            Reset
+          </Button>
+        </div>
+      </header>
+
+      {/* Workspace fills remaining viewport */}
+      <main className="grid min-h-0 flex-1 grid-cols-12 gap-3 p-3">
+        {/* Left column · agent swarm hero */}
+        <div className="col-span-12 flex min-h-0 lg:col-span-4">
+          <Panel
+            title="Agent swarm"
+            caption={`${cohortStats.agents} agents · cohort layout`}
+            right={
+              <LiveDot
+                label={paused ? "Paused" : "Acting"}
+                tone={paused ? "paused" : "live"}
               />
-            </Panel>
-
-            <Panel title="Inject headline" caption="⌘↵" className="">
-              <HeadlineInjector onInject={controls.injectHeadline} />
-            </Panel>
-          </div>
-
-          {/* Center column · chart + swarm + tape */}
-          <div className="col-span-12 lg:col-span-6 flex flex-col gap-4">
-            <Panel
-              title="Price action"
-              caption={`${snapshot?.prices.length ?? 0} ticks`}
-              right={
-                <div className="flex items-center gap-2">
-                  <Tag tone="neutral">AMM · √-impact</Tag>
-                  <Tag tone="muted">tickMs 280</Tag>
-                </div>
-              }
-              bodyClassName="px-0 pb-0 pt-0"
-              flush
-            >
-              <div className="bg-grid-fine relative h-[360px] w-full">
-                {snapshot && (
-                  <PriceChart
-                    prices={snapshot.prices}
-                    news={snapshot.news}
-                    ticker={snapshot.ticker}
-                    openPrice={snapshot.openPrice}
-                  />
-                )}
-              </div>
-            </Panel>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Panel
-                title="Agent swarm"
-                caption="cohort layout"
-                right={
-                  <LiveDot
-                    label={paused ? "Paused" : "Acting"}
-                    tone={paused ? "paused" : "live"}
-                  />
-                }
-                flush
-                bodyClassName=""
-              >
-                <div className="bg-grid-fine">
-                  <AgentSwarm
-                    agents={snapshot?.agents ?? []}
-                    decisions={snapshot?.decisions ?? []}
-                  />
-                </div>
-              </Panel>
-              <Panel
-                title="Order tape"
-                caption="last 14 fills"
-                flush
-                bodyClassName=""
-              >
-                <OrderTape decisions={snapshot?.decisions ?? []} />
-              </Panel>
-            </div>
-
-            <Panel
-              title="Scenario probability"
-              caption="from population dispersion"
-              right={<Tag tone="accent">Sellable output</Tag>}
-              flush
-              bodyClassName="overflow-x-auto"
-            >
-              <ScenarioTable rows={snapshot?.scenarios ?? []} />
-            </Panel>
-          </div>
-
-          {/* Right column · news + reasoning */}
-          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4">
-            <Panel
-              title="News tape"
-              caption={`${cohortStats.news} headlines`}
-              flush
-              bodyClassName=""
-            >
-              <div className="max-h-[300px] overflow-y-auto no-scrollbar">
-                <NewsFeed news={snapshot?.news ?? []} />
-              </div>
-            </Panel>
-
-            <Panel
-              title="Agent reasoning"
-              caption="streaming"
-              right={
-                <Tag tone="neutral">{snapshot?.decisions.length ?? 0}</Tag>
-              }
-              flush
-              bodyClassName=""
-            >
-              <div className="max-h-[520px] overflow-y-auto no-scrollbar">
-                <AgentReasoning decisions={snapshot?.decisions ?? []} />
-              </div>
-            </Panel>
-          </div>
+            }
+            flush
+            className="min-h-0 flex-1"
+            bodyClassName="min-h-0 flex-1 bg-grid-fine"
+          >
+            <AgentSwarm
+              agents={snapshot?.agents ?? []}
+              decisions={snapshot?.decisions ?? []}
+              height={240}
+            />
+          </Panel>
         </div>
 
-        {/* Bottom strip · KPI bar */}
-        <div className="mt-6 grid grid-cols-2 gap-4 border border-[var(--color-line)] bg-[var(--color-surface)] p-6 md:grid-cols-4 lg:grid-cols-6">
-          <Stat label="Agents" value={cohortStats.agents} mono />
-          <Stat label="Decisions / sec" value={cohortStats.tps} mono />
-          <Stat
-            label="Open"
-            value={snapshot?.openPrice.toFixed(2) ?? "—"}
-            mono
-          />
-          <Stat
-            label="Last"
-            value={snapshot?.price.toFixed(2) ?? "—"}
-            delta={changePct}
-            mono
-          />
-          <Stat label="Headlines" value={cohortStats.news} mono />
-          <Stat label="Cycle" value={snapshot?.cycle ?? 0} mono />
+        {/* Center column · chart + order tape */}
+        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5">
+          <Panel
+            title="Price action"
+            caption={`${snapshot?.prices.length ?? 0} ticks`}
+            right={
+              <div className="flex items-center gap-2">
+                <Tag tone="neutral">AMM · √-impact</Tag>
+                <Tag tone="muted">cycle {snapshot?.cycle ?? 0}</Tag>
+              </div>
+            }
+            flush
+            className="min-h-0 flex-[1.8]"
+            bodyClassName="min-h-0 flex-1 bg-grid-fine relative"
+          >
+            {snapshot && (
+              <PriceChart
+                prices={snapshot.prices}
+                news={snapshot.news}
+                ticker={snapshot.ticker}
+                openPrice={snapshot.openPrice}
+              />
+            )}
+          </Panel>
+
+          <Panel
+            title="Order tape"
+            caption="last 14 fills"
+            flush
+            className="min-h-0 flex-1"
+            bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
+          >
+            <OrderTape decisions={snapshot?.decisions ?? []} />
+          </Panel>
+        </div>
+
+        {/* Right column · inject + reasoning */}
+        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
+          <Panel title="Inject headline" caption="⌘↵" className="shrink-0">
+            <HeadlineInjector onInject={controls.injectHeadline} />
+          </Panel>
+
+          <Panel
+            title="Agent reasoning"
+            caption="streaming"
+            right={<Tag tone="neutral">{snapshot?.decisions.length ?? 0}</Tag>}
+            flush
+            className="min-h-0 flex-1"
+            bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
+          >
+            <AgentReasoning decisions={snapshot?.decisions ?? []} />
+          </Panel>
         </div>
       </main>
+    </div>
+  );
+}
 
-      <Footer />
+function InlineStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="hidden items-baseline gap-1.5 md:flex">
+      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+        {label}
+      </span>
+      <span className="font-mono text-xs tabular-nums text-[var(--color-fg)]">
+        {value}
+      </span>
     </div>
   );
 }

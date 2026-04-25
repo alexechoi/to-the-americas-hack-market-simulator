@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Animal Spirits — agent-based market simulator",
+  title: "Animal Spirits - agent-based market simulator",
   description:
     "A finance-native multi-agent market simulator. Inject a headline, watch a population of trader personas react in real time, and see the price move before it moves.",
 };

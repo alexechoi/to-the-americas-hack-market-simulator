@@ -4,9 +4,46 @@ import type { ScenarioRow } from "@/app/lib/sim/types";
 
 interface ScenarioTableProps {
   rows: ScenarioRow[];
+  /** Compact list view for narrow side rails. */
+  compact?: boolean;
 }
 
-export function ScenarioTable({ rows }: ScenarioTableProps) {
+export function ScenarioTable({ rows, compact }: ScenarioTableProps) {
+  if (compact) {
+    return (
+      <ul className="divide-y divide-[var(--color-line)]">
+        {rows.map((r) => {
+          const tone =
+            r.expectedMove > 0
+              ? "var(--color-up)"
+              : r.expectedMove < 0
+                ? "var(--color-down)"
+                : "var(--color-fg-muted)";
+          return (
+            <li
+              key={r.id}
+              className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-[var(--color-surface-2)]"
+            >
+              <span className="w-9 shrink-0 font-mono text-xs tabular-nums text-[var(--color-fg-muted)]">
+                {(r.probability * 100).toFixed(0)}%
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-fg)]">
+                {r.headline}
+              </span>
+              <span
+                className="shrink-0 font-mono text-xs tabular-nums"
+                style={{ color: tone }}
+              >
+                {r.expectedMove > 0 ? "+" : ""}
+                {r.expectedMove.toFixed(2)}%
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
   return (
     <table className="w-full border-separate border-spacing-0 text-sm">
       <thead>

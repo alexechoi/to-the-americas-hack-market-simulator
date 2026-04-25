@@ -11,16 +11,6 @@ export function CallToAction() {
       <WarpBackground intensity={0.7} speed={2} grid={false} />
 
       <div className="relative z-10 mx-auto max-w-[1440px] px-6 py-32 md:px-10">
-        <motion.p
-          initial={{ opacity: 0, y: 6 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.5 }}
-          className="font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--color-fg-muted)]"
-        >
-          ◉ Operator access · invite only
-        </motion.p>
-
         <motion.h2
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -59,9 +49,6 @@ export function CallToAction() {
           >
             Inject a headline
           </Link>
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-fg-faint)] sm:ml-2">
-            Open beta · no credentials required
-          </span>
         </motion.div>
       </div>
     </section>
