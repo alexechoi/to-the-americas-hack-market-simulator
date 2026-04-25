@@ -11,11 +11,12 @@ class MMParams:
     """Market maker parameters. All stable per session."""
 
     tick: float = 0.01
-    vol: float = 0.5                 # σ, constant in v1
-    half_spread_coef: float = 1.0    # α  (half_spread = max(tick, α·σ))
-    kyle_lambda: float = 0.05        # λ  (fair impact per unit signed inside-volume)
+    vol: float = 0.5  # σ, constant in v1
+    half_spread_coef: float = 1.0  # α  (half_spread = max(tick, α·σ))
+    kyle_lambda: float = 0.05  # λ  (fair impact per unit signed inside-volume)
     ladder_depth: int = 10
     level_size: int = 10
+    size_growth: float = 0.4  # size_i = level_size · (1 + i · size_growth); deeper levels carry more depth
 
     # cosmetic salt (deterministic per (salt_seed, tick_id))
     size_jitter: float = 0.4
@@ -56,15 +57,15 @@ class Order:
 @dataclass(frozen=True)
 class Fill:
     agent_id: str
-    qty: int                                           # signed
+    qty: int  # signed
     vwap: float
-    levels: tuple[tuple[float, int], ...]              # [(price, qty), ...] actually touched
+    levels: tuple[tuple[float, int], ...]  # [(price, qty), ...] actually touched
 
 
 @dataclass(frozen=True)
 class Killed:
     agent_id: str
-    reason: str                                        # "limit_not_crossed" | "insufficient_liquidity"
+    reason: str  # "limit_not_crossed" | "insufficient_liquidity"
 
 
 @dataclass(frozen=True)
@@ -88,18 +89,18 @@ class AccountSnapshot:
     agent_id: str
     inventory: int
     cash: float
-    equity: float                                      # cash + inventory · fair
+    equity: float  # cash + inventory · fair
     n_fills: int
 
 
 @dataclass(frozen=True)
 class Snapshot:
-    tick_id: int                                       # monotonic, advances every tick (UI + event)
-    event_tick: int                                    # advances only when orders processed
+    tick_id: int  # monotonic, advances every tick (UI + event)
+    event_tick: int  # advances only when orders processed
     fair: float
     best_bid: float
     best_ask: float
-    mid: float                                         # = fair
+    mid: float  # = fair
     ladder: Ladder
     recent_trades: tuple[Fill, ...] = field(default_factory=tuple)
 

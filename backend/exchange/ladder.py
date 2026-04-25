@@ -36,7 +36,14 @@ def build_ladder(fair: float, tick_id: int, p: MMParams) -> Ladder:
             if i > 0 and rng.random() < p.gap_prob:
                 offset += 1
             price = round(fair + sign * (hs + offset * p.tick), 4)
-            size = p.level_size * mult * (1.0 + p.size_jitter * rng.uniform(-1.0, 1.0))
+            # Depth taper: deeper levels carry more size (linear in level index).
+            depth_mult = 1.0 + i * p.size_growth
+            size = (
+                p.level_size
+                * mult
+                * depth_mult
+                * (1.0 + p.size_jitter * rng.uniform(-1.0, 1.0))
+            )
             if rng.random() < p.jumbo_prob:
                 size *= p.jumbo_mult
             levels.append((price, max(1, round(size))))
