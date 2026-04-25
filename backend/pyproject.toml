@@ -9,6 +9,7 @@ dependencies = [
     "firebase-admin>=6.6.0",
     "logfire[fastapi]>=4.32.1",
     "lxml>=6.1.0",
+    "mubit-sdk>=0.7.0",
     "pydantic-ai>=1.16",
     "python-dotenv>=1.0.0",
     "ruff>=0.14.10",
