@@ -32,6 +32,12 @@ export function Header() {
             >
               How it works
             </Link>
+            <Link
+              href="/debug"
+              className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)] transition-colors hover:text-[var(--color-fg)]"
+            >
+              Debug
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">
