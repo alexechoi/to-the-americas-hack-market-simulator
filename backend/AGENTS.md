@@ -93,7 +93,7 @@ import logfire
 
 from agents import build_trader_agent, TraderContext
 
-agent = build_trader_agent()  # uses LLM_MODEL env var (default: groq:llama-3.3-70b-versatile)
+agent = build_trader_agent()  # uses LLM_MODEL env var (default: gateway/groq:llama-3.3-70b-versatile)
 
 with logfire.span("trader_turn", agent_id=ctx.persona.agent_id):
     result = await agent.run("Decide your next action.", deps=ctx)
@@ -105,23 +105,29 @@ ex.submit(Order(agent_id=ctx.persona.agent_id, qty=decision.to_signed_qty(), lim
 Per-persona model override (use sparingly — keeps the cache small):
 
 ```python
-hero_agent = build_trader_agent(model="anthropic:claude-sonnet-4-6")
+hero_agent = build_trader_agent(model="gateway/anthropic:claude-sonnet-4-6")
 ```
 
-### Provider env vars
+### PydanticAI Gateway (single API key)
 
-Each provider expects its own API key in `backend/.env`. Pydantic-AI picks them up
-automatically — `agents/llm.py` does not hand them to the provider:
+We use **PydanticAI Gateway** for inference. That means:
+
+- One API key: `PYDANTIC_AI_GATEWAY_API_KEY`
+- Model strings are prefixed with `gateway/...` and then use the upstream provider format.
+
+`agents/llm.py` never passes credentials explicitly — Pydantic-AI reads them from the env.
 
 | `LLM_MODEL` prefix | Required env var |
 |---|---|
-| `groq:...`        | `GROQ_API_KEY`        |
-| `anthropic:...`   | `ANTHROPIC_API_KEY`   |
-| `openai:...`      | `OPENAI_API_KEY`      |
-| `google-gla:...`  | `GEMINI_API_KEY`      |
+| `gateway/...`      | `PYDANTIC_AI_GATEWAY_API_KEY` |
 
-To add a new provider: install the extra (`uv add 'pydantic-ai-slim[<provider>]'`),
-add the env var to `.env`, set `LLM_MODEL=<provider>:<model>`. **No code change.**
+Examples:
+
+- `LLM_MODEL=gateway/groq:llama-3.3-70b-versatile`
+- `LLM_MODEL=gateway/anthropic:claude-sonnet-4-6`
+- `LLM_MODEL=gateway/openai:gpt-5.2`
+
+To switch models: set `LLM_MODEL` in `backend/.env`. **No code change.**
 
 ## 5. Engine vs schema boundary
 

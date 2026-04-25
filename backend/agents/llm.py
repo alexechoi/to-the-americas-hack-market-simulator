@@ -32,17 +32,17 @@ logger = logging.getLogger(__name__)
 
 TraderAgent = Agent[TraderContext, TraderDecision]
 
-DEFAULT_MODEL = "groq:llama-3.3-70b-versatile"
+DEFAULT_MODEL = "gateway/groq:llama-3.3-70b-versatile"
 
 
 def default_model() -> str:
     """Return the model identifier for new agents. Override via `LLM_MODEL` env var.
 
     Format follows pydantic-ai's `provider:model` convention. Examples:
-        * `groq:llama-3.3-70b-versatile`     (default; fast, cheap)
-        * `groq:llama-3.1-8b-instant`        (even faster, smaller)
-        * `anthropic:claude-sonnet-4-6`      (slow + smart, for hero personas)
-        * `openai:gpt-5.2`                   (fallback)
+        * `gateway/groq:llama-3.3-70b-versatile`  (default; fast, cheap)
+        * `gateway/groq:llama-3.1-8b-instant`     (even faster, smaller)
+        * `gateway/anthropic:claude-sonnet-4-6`   (slow + smart, for hero personas)
+        * `gateway/openai:gpt-5.2`                (fallback)
     """
     return os.getenv("LLM_MODEL", DEFAULT_MODEL).strip()
 
@@ -129,7 +129,7 @@ def build_trader_agent(*, model: str | None = None) -> TraderAgent:
     The Agent itself is cached per model string (Agents are stateless); the persona
     is supplied via `TraderContext.persona` on each `.run` call.
 
-    Pass `model="anthropic:claude-sonnet-4-6"` (or any other pydantic-ai-supported
-    `provider:model`) to override the default for hero personas.
+    Pass `model="gateway/anthropic:claude-sonnet-4-6"` (or any other pydantic-ai-supported
+    gateway model string) to override the default for hero personas.
     """
     return _trader_agent_for_model(model or default_model())
