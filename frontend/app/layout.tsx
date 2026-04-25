@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "App",
-  description: "Full stack application",
+  title: "Reflex",
+  description: "Multi-agent market simulator",
 };
 
 export default function RootLayout({

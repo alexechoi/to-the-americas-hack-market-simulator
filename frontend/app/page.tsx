@@ -6,7 +6,7 @@ export default function Home() {
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Template
+            Reflex
           </span>
           <nav className="flex items-center gap-4">
             <Link
@@ -28,12 +28,12 @@ export default function Home() {
       <main className="flex flex-1 flex-col items-center justify-center px-4">
         <div className="max-w-2xl text-center">
           <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-5xl">
-            Full Stack Template
+            Reflex
           </h1>
           <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-            A production-ready starter with Next.js, Firebase Authentication,
-            and Firestore. Build your app faster with authentication already
-            configured.
+            A multi-agent market simulator. Inject a headline, watch a
+            population of trader personas react in real time, and see how price
+            moves before it moves.
           </p>
           <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
@@ -54,7 +54,7 @@ export default function Home() {
 
       <footer className="border-t border-zinc-200 bg-white py-6 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto max-w-5xl px-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          Built with Next.js and Firebase
+          Reflex — agent-based market simulation
         </div>
       </footer>
     </div>
