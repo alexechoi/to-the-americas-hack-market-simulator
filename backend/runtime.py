@@ -142,7 +142,12 @@ class ExchangeRuntime:
         ticker: str = "NVDA",
         ticker_name: str = "NVIDIA Corp",
     ) -> None:
-        self._params = params or MMParams()
+        # ``noise_bps=4`` adds a small Gaussian random walk to ``fair`` on every
+        # UI tick so the chart breathes during quiet periods without any agent
+        # flow. At 5 Hz UI cadence that's ≈ 4·√5 ≈ 9 bps/sec → ~0.7 %/min std,
+        # which is lively but not unrealistic. Tests still default to ``0``
+        # because they construct ``MMParams(...)`` explicitly.
+        self._params = params or MMParams(noise_bps=4.0)
         self.exchange = Exchange(params=self._params, initial_fair=initial_fair)
         # News is part of the simulation, not a separate service — same ownership
         # boundary as the ladder. Agents and HTTP handlers read via `runtime.news_bus`.

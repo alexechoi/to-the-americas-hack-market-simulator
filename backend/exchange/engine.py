@@ -40,7 +40,7 @@ class Exchange:
         initial_fair: float,
         session_seed: int = 0,
         recent_trades_cap: int = 200,
-        history_cap: int = 7_200,  # ~2h at 1 Hz event cadence
+        history_cap: int = 36_000,  # ~2h at 5 Hz UI cadence (noise records every UI tick)
     ) -> None:
         self.params = replace(params, salt_seed=session_seed)
         self.state = MMState(fair=float(initial_fair))
@@ -121,6 +121,10 @@ class Exchange:
         Advance one tick.
 
         Always increments `tick_id` (salt re-rolls, UI 'breathes').
+        If ``params.noise_bps > 0``, applies a deterministic Gaussian shock to
+        ``fair`` on every tick — this is what makes the chart move during
+        quiet periods with no agent flow. The shock is independent of order
+        impact (which still applies on top via Kyle λ).
         If `advance_event` and there are pending orders, processes them in a shuffled serial order,
         mutating MM fair and agent ledgers between fills.
 
@@ -129,6 +133,7 @@ class Exchange:
         fresh fills without diffing the rolling buffer.
         """
         self._tick_id += 1
+        self._apply_noise()
         new_fills: list[Fill] = []
         if advance_event and self._pending:
             self._event_tick += 1
@@ -231,6 +236,25 @@ class Exchange:
         )
         self._recent_trades.append(fill)
         return fill
+
+    def _apply_noise(self) -> None:
+        """Apply a per-tick Gaussian shock to ``fair`` and record the new point.
+
+        Off entirely when ``noise_bps == 0`` (default in tests). When enabled,
+        the σ scales with the current ``fair`` so the random walk feels the
+        same regardless of price level (a $100 stock and a $50k crypto get
+        the same *relative* wiggle). RNG is seeded per tick so the path is
+        reproducible across restarts with the same ``salt_seed``.
+
+        Floor: ``fair`` is clamped at one tick so a runaway negative draw
+        can't push it through zero.
+        """
+        if self.params.noise_bps <= 0:
+            return
+        sigma = self.state.fair * self.params.noise_bps / 10_000.0
+        rng = random.Random(f"noise:{self.params.salt_seed}:{self._tick_id}")
+        self.state.fair = max(self.params.tick, self.state.fair + rng.gauss(0.0, sigma))
+        self._record_price()
 
     def _record_price(self) -> None:
         """Append a PricePoint at the current (tick_id, fair). Trim in bulk when over cap."""

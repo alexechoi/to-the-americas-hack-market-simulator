@@ -26,6 +26,13 @@ class MMParams:
     jumbo_mult: float = 3.0
     salt_seed: int = 0
 
+    # Background random walk applied to ``fair`` on every tick. Units: basis
+    # points of ``fair`` (so 1.0 == 0.01% std-dev per tick). Scales naturally
+    # across tickers regardless of price level. Default 0 keeps the engine
+    # purely order-driven (tests stay deterministic); the live runtime turns it
+    # on so the chart "breathes" during quiet periods.
+    noise_bps: float = 0.0
+
 
 @dataclass
 class MMState:

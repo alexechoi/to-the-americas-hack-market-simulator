@@ -18,12 +18,20 @@ interface AgentSwarmProps {
   height?: number;
 }
 
+/** Pixel radius (CSS) used for cursor hit-testing — slightly larger than the
+ *  visible dot so dots are easy to grab without pixel-perfect aim. */
+const HIT_RADIUS = 9;
+/** Tooltip box dimensions (CSS) used to keep it inside the panel. */
+const TOOLTIP_W = 240;
+const TOOLTIP_H = 132;
+
 /**
  * Each agent is a fixed point on a packed grid, clustered by reaction-speed
  * tier. When an agent decides something the matching dot pulses in its action
  * colour (BUY=up, SELL=down, HOLD=muted) and an orbit ring appears for ~800ms.
  * Layout is resize-aware so the swarm fills its container in tall, wide, or
- * square panels.
+ * square panels. Hovering a dot reveals a tooltip with the persona and its
+ * latest decision.
  */
 export function AgentSwarm({
   agents,
@@ -34,11 +42,20 @@ export function AgentSwarm({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dprRef = useRef(1);
   const [size, setSize] = useState({ w: 600, h: height });
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const layout = useMemo(
     () => layoutAgents(agents, size.w, size.h),
     [agents, size.w, size.h],
   );
+
+  const nodeById = useMemo(() => {
+    const m = new Map<string, SwarmNode>();
+    for (const n of layout.nodes) m.set(n.agent.agent_id, n);
+    return m;
+  }, [layout]);
+
+  const hoveredNode = hoveredId ? (nodeById.get(hoveredId) ?? null) : null;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -106,6 +123,7 @@ export function AgentSwarm({
             : last?.action === "sell"
               ? "#ff6e6e"
               : baseColor;
+        const isHovered = node.agent.agent_id === hoveredId;
 
         // orbit ring on recent decision
         if (pulse > 0) {
@@ -116,17 +134,55 @@ export function AgentSwarm({
           ctx.stroke();
         }
 
+        // hover halo — subtle, drawn under the dot so the colour stays clean
+        if (isHovered) {
+          ctx.beginPath();
+          ctx.strokeStyle = withAlpha("#fafafa", 0.55);
+          ctx.lineWidth = 1 * dpr;
+          ctx.arc(cx, cy, r + 4 * dpr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
         // dot
         ctx.beginPath();
         ctx.fillStyle = pulse > 0 ? sideColor : baseColor;
-        ctx.arc(cx, cy, r + pulse * 1.4 * dpr, 0, Math.PI * 2);
+        ctx.arc(
+          cx,
+          cy,
+          r + pulse * 1.4 * dpr + (isHovered ? 0.6 * dpr : 0),
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
       }
       raf = requestAnimationFrame(draw);
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [layout, lastByAgent]);
+  }, [layout, lastByAgent, hoveredId]);
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const hit = nearestNode(layout.nodes, px, py, HIT_RADIUS);
+    setHoveredId((prev) => {
+      const next = hit ? hit.agent.agent_id : null;
+      return prev === next ? prev : next;
+    });
+  };
+
+  const handlePointerLeave = () => setHoveredId(null);
+
+  const tooltipPos = hoveredNode
+    ? clampTooltip(hoveredNode.x, hoveredNode.y, size.w, size.h)
+    : null;
+  const hoveredAgent = hoveredNode?.agent ?? null;
+  const hoveredLast = hoveredAgent
+    ? (lastByAgent.get(hoveredAgent.agent_id) ?? null)
+    : null;
 
   return (
     <div
@@ -134,7 +190,96 @@ export function AgentSwarm({
       className="relative h-full w-full"
       style={{ minHeight: height }}
     >
-      <canvas ref={canvasRef} className="block h-full w-full" />
+      <canvas
+        ref={canvasRef}
+        className="block h-full w-full"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+      />
+      {hoveredAgent && tooltipPos && (
+        <AgentTooltip
+          agent={hoveredAgent}
+          last={hoveredLast}
+          x={tooltipPos.x}
+          y={tooltipPos.y}
+        />
+      )}
+    </div>
+  );
+}
+
+interface AgentTooltipProps {
+  agent: BackendAgent;
+  last: OrderLogEntry | null;
+  x: number;
+  y: number;
+}
+
+function AgentTooltip({ agent, last, x, y }: AgentTooltipProps) {
+  const meta = archetypeMeta(agent.archetype);
+  const tierLabel = TIERS.find((t) => t.id === meta.tier)?.label ?? meta.tier;
+  const tone =
+    last?.action === "buy"
+      ? "var(--color-up)"
+      : last?.action === "sell"
+        ? "var(--color-down)"
+        : "var(--color-fg-muted)";
+  const showQty = last && last.action !== "hold";
+  return (
+    <div
+      className="pointer-events-none absolute z-10 border border-[var(--color-line-strong)] bg-[var(--color-surface-2)] px-3 py-2.5 shadow-lg"
+      style={{
+        left: x,
+        top: y,
+        width: TOOLTIP_W,
+      }}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate text-[11px] font-semibold text-[var(--color-fg)]">
+          {agent.display_name}
+        </span>
+        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+          {meta.shortLabel}
+        </span>
+      </div>
+      <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+        {tierLabel}
+      </div>
+
+      <div className="mt-2 border-t border-[var(--color-line)] pt-2">
+        {last ? (
+          <>
+            <div className="flex items-baseline gap-2">
+              <span
+                className="font-mono text-[10px] tabular-nums tracking-[0.16em]"
+                style={{ color: tone }}
+              >
+                {last.action.toUpperCase()}
+              </span>
+              {showQty && (
+                <span className="font-mono text-[11px] tabular-nums text-[var(--color-fg)]">
+                  {last.quantity.toLocaleString()}
+                </span>
+              )}
+              <span className="font-mono text-[10px] tabular-nums text-[var(--color-fg-faint)]">
+                @ {last.limitPrice.toFixed(2)}
+              </span>
+              <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+                {formatAgo(last.ts)}
+              </span>
+            </div>
+            {last.reasoning && (
+              <p className="mt-1.5 line-clamp-3 text-[11px] leading-snug text-[var(--color-fg-muted)]">
+                {last.reasoning}
+              </p>
+            )}
+          </>
+        ) : (
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+            No decisions yet
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -251,6 +396,58 @@ function packIntoCluster(
     const y = innerY + r * cellH + cellH / 2;
     nodes.push({ agent, x, y });
   });
+}
+
+/** Closest node within `maxDist` CSS pixels of (px, py), or null. */
+function nearestNode(
+  nodes: SwarmNode[],
+  px: number,
+  py: number,
+  maxDist: number,
+): SwarmNode | null {
+  let best: SwarmNode | null = null;
+  let bestDistSq = maxDist * maxDist;
+  for (const n of nodes) {
+    const dx = n.x - px;
+    const dy = n.y - py;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= bestDistSq) {
+      best = n;
+      bestDistSq = d2;
+    }
+  }
+  return best;
+}
+
+/** Place the tooltip near the dot, flipping sides so it stays inside the panel. */
+function clampTooltip(
+  nodeX: number,
+  nodeY: number,
+  containerW: number,
+  containerH: number,
+): { x: number; y: number } {
+  const margin = 6;
+  const offset = 12;
+  const fitsRight = nodeX + offset + TOOLTIP_W + margin <= containerW;
+  const x = fitsRight
+    ? nodeX + offset
+    : Math.max(margin, nodeX - offset - TOOLTIP_W);
+  const fitsBelow = nodeY + offset + TOOLTIP_H + margin <= containerH;
+  const y = fitsBelow
+    ? nodeY + offset
+    : Math.max(margin, nodeY - offset - TOOLTIP_H);
+  return { x, y };
+}
+
+function formatAgo(ts: number): string {
+  const ms = Math.max(0, Date.now() - ts);
+  if (ms < 1000) return "just now";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
 }
 
 function withAlpha(hex: string, alpha: number): string {
