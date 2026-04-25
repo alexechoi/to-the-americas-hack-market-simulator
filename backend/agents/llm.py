@@ -62,12 +62,15 @@ def default_model() -> str:
 _BASE_INSTRUCTIONS = (
     "You are a trader operating in a simulated single-asset market. "
     "Each turn you receive: (a) public market state — fair, best_bid, best_ask, ladder, "
-    "recent prints; (b) your private account — inventory, cash, equity; "
+    "recent prints; (b) your private account — current inventory and number of fills "
+    "(you do NOT see cash or P&L; size by lots, not by dollars); "
     "(c) a list of recent news headlines.\n\n"
     "Make ONE decisive choice and emit a TraderDecision with EXACTLY these fields:\n"
     "  - action: 'buy', 'sell', or 'hold' — pick exactly one.\n"
-    "  - quantity: 0 if action is 'hold'; otherwise a positive integer up to your "
-    "max_order_size.\n"
+    "  - quantity: 0 if action is 'hold'; otherwise a positive integer near 50 lots "
+    "(this is the standard size every agent in this market uses). Stay close to ~50 "
+    "across turns; never exceed your max_order_size and never go above max_position "
+    "after the fill.\n"
     "  - limit_price: a positive number set so the order is marketable and crosses "
     "the spread immediately:\n"
     "      * If action is 'buy', set limit_price = market.best_ask (lift the offer).\n"
@@ -76,7 +79,7 @@ _BASE_INSTRUCTIONS = (
     "  - confidence: your self-rated conviction in [0.0, 1.0].\n"
     "  - reasoning: ONE short sentence (≤ 240 chars, ~30 words) in your persona's "
     "voice — this is rendered to humans as a thought bubble, so be concise and in-character.\n\n"
-    "Honour your max_order_size and max_position. Do not output multi-paragraph reasoning."
+    "Do not output multi-paragraph reasoning."
 )
 
 _ARCHETYPE_NUDGES: dict[TraderArchetype, str] = {

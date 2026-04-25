@@ -190,14 +190,18 @@ class TradePrint(BaseModel):
 
 
 class AccountView(BaseModel):
-    """The agent's own private ledger view."""
+    """The agent's own private ledger view.
+
+    Intentionally omits cash / equity — agents don't see how much capital they have.
+    Position-sizing is bounded by the persona's `max_order_size` and `max_position`,
+    not by a dollar budget on the LLM side. The exchange still tracks cash/equity
+    on `AccountSnapshot` for accounting + the HTTP API.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     agent_id: str
     inventory: int
-    cash: float
-    equity: float
     n_fills: int
 
     @classmethod
@@ -205,8 +209,6 @@ class AccountView(BaseModel):
         return cls(
             agent_id=snap.agent_id,
             inventory=snap.inventory,
-            cash=snap.cash,
-            equity=snap.equity,
             n_fills=snap.n_fills,
         )
 
