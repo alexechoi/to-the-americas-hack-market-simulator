@@ -2,12 +2,40 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { spawnExchange } from "@/app/lib/exchange/api";
 
 import { WarpBackground } from "../ui/WarpBackground";
 import { AgentLattice } from "./AgentLattice";
 import { ReactionTape } from "./ReactionTape";
 
 export function Hero() {
+  const router = useRouter();
+  const [ticker, setTicker] = useState("NVDA");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleEnter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const symbol = ticker.trim().toUpperCase();
+    if (!symbol || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      // Bootstrap the backend BEFORE routing — `/sim` mounts the SSE stream
+      // immediately on render and we want it to receive the new ticker on its
+      // very first envelope rather than re-spawning mid-render.
+      await spawnExchange(symbol);
+      router.push("/sim");
+    } catch (err) {
+      console.error("spawnExchange failed", err);
+      setError(err instanceof Error ? err.message : "Failed to spawn ticker");
+      setSubmitting(false);
+    }
+  };
+
   return (
     <section className="relative isolate overflow-hidden">
       <WarpBackground intensity={0.62} speed={1.6} />
@@ -41,31 +69,60 @@ export function Hero() {
               imagine, before it ships.
             </motion.p>
 
-            <motion.div
+            <motion.form
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
+              onSubmit={handleEnter}
               className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center"
             >
-              <Link
-                href="/sim"
-                className="group inline-flex h-12 items-center gap-2 bg-[var(--color-accent)] px-6 text-sm font-medium tracking-tight text-[var(--color-accent-ink)] transition-colors hover:bg-[#e6ff5e]"
-              >
-                Open the floor
-                <span
-                  aria-hidden
-                  className="transition-transform group-hover:translate-x-0.5"
-                >
-                  →
+              <label className="flex items-stretch border border-[var(--color-line-strong)] bg-[var(--color-surface)] focus-within:border-[var(--color-accent)]">
+                <span className="flex items-center px-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-fg-faint)]">
+                  ticker
                 </span>
-              </Link>
+                <input
+                  value={ticker}
+                  onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                  spellCheck={false}
+                  autoCapitalize="characters"
+                  maxLength={16}
+                  disabled={submitting}
+                  placeholder="NVDA"
+                  className="h-12 w-32 bg-transparent pr-4 font-mono text-sm tracking-[0.08em] text-[var(--color-fg)] outline-none placeholder:text-[var(--color-fg-faint)] disabled:opacity-60"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={submitting || !ticker.trim()}
+                className="group inline-flex h-12 items-center gap-2 bg-[var(--color-accent)] px-6 text-sm font-medium tracking-tight text-[var(--color-accent-ink)] transition-colors hover:bg-[#e6ff5e] disabled:opacity-60 disabled:hover:bg-[var(--color-accent)]"
+              >
+                {submitting ? "Bootstrapping…" : "Open the floor"}
+                {!submitting && (
+                  <span
+                    aria-hidden
+                    className="transition-transform group-hover:translate-x-0.5"
+                  >
+                    →
+                  </span>
+                )}
+              </button>
               <Link
                 href="/#how"
                 className="inline-flex h-12 items-center gap-2 border border-[var(--color-line-strong)] bg-transparent px-6 text-sm font-medium text-[var(--color-fg)] transition-colors hover:border-[var(--color-fg-faint)] hover:bg-[var(--color-surface-2)]"
               >
                 Read the manifesto
               </Link>
-            </motion.div>
+            </motion.form>
+
+            {error && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-down)]"
+              >
+                {error}
+              </motion.p>
+            )}
           </div>
 
           {/* lattice + tape */}

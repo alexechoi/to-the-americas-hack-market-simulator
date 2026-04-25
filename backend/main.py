@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,6 +13,7 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 from agents import default_roster  # noqa: E402
 from auth import FirebaseUser, OptionalFirebaseUser  # noqa: E402
+from bootstrap import BootstrapError, bootstrap_from_yahoo  # noqa: E402
 from debug_api import router as debug_router  # noqa: E402
 from exchange_api import router as exchange_router  # noqa: E402
 from firebase_service import auto_initialize  # noqa: E402
@@ -22,6 +24,14 @@ from runtime import runtime as exchange_runtime  # noqa: E402
 from swarm import agent_swarm  # noqa: E402
 from yahoo_finance_api import router as yahoo_router  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
+# The cold-start ticker. Override via the ``BOOTSTRAP_TICKER`` env var (useful
+# for demos or when Yahoo is down for a specific symbol and you want a cleaner
+# fallback symbol). Any user-driven change mid-session goes through
+# ``POST /exchange/spawn``, which bypasses this.
+DEFAULT_BOOTSTRAP_TICKER = "NVDA"
+
 configure_observability()
 
 auto_initialize()
@@ -29,10 +39,41 @@ auto_initialize()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Start/stop the exchange tick loop and the agent swarm alongside the app."""
-    exchange_runtime.start()
+    """Start/stop the exchange tick loop and the agent swarm alongside the app.
+
+    Bootstrap order:
+        1. Register the default roster on the swarm (personas only — no tasks yet).
+        2. Try to hydrate the runtime from Yahoo Finance for ``BOOTSTRAP_TICKER``
+           (defaults to NVDA). This swaps in a fresh Exchange seeded at the live
+           spot price, plus a few recent headlines on the news bus.
+        3. If Yahoo is unreachable or returns nothing usable, log a warning and
+           keep the runtime's default cold-start state (fair=100.0, ticker=NVDA,
+           no seed news) so the backend always boots.
+        4. Start the exchange tick loop and the swarm task fleet.
+    """
+    # Register personas first so `runtime.respawn` can re-register them on the
+    # fresh exchange instance it creates.
     for persona in default_roster():
         agent_swarm.register(persona)
+
+    bootstrap_ticker = (
+        os.getenv("BOOTSTRAP_TICKER", DEFAULT_BOOTSTRAP_TICKER).strip()
+        or DEFAULT_BOOTSTRAP_TICKER
+    )
+    try:
+        payload = await bootstrap_from_yahoo(bootstrap_ticker)
+        await exchange_runtime.respawn(payload, personas=agent_swarm.list_personas())
+    except BootstrapError as exc:
+        # Yahoo may be slow or the symbol temporarily unresolvable — never
+        # crash cold start on that. The runtime keeps its NVDA/$100 default
+        # and the user can re-spawn via the HTTP endpoint once Yahoo is up.
+        logger.warning(
+            "bootstrap failed ticker=%s err=%s — falling back to cold-start defaults",
+            bootstrap_ticker,
+            exc,
+        )
+
+    exchange_runtime.start()
     agent_swarm.start()
     try:
         yield

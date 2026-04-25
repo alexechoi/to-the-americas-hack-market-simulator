@@ -2,7 +2,8 @@
 
 import { useMemo } from "react";
 
-import type { NewsHeadline, PricePoint } from "@/app/lib/sim/types";
+import type { PricePoint } from "@/app/lib/exchange/types";
+import type { NewsHeadline } from "@/app/lib/sim/types";
 
 interface PriceChartProps {
   prices: PricePoint[];

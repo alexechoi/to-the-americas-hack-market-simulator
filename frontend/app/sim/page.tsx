@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { AgentReasoning } from "@/app/components/sim/AgentReasoning";
 import { AgentSwarm } from "@/app/components/sim/AgentSwarm";
 import { BackendNewsFeed } from "@/app/components/sim/BackendNewsFeed";
 import { HeadlineInjector } from "@/app/components/sim/HeadlineInjector";
 import { OrderBook } from "@/app/components/sim/OrderBook";
+import { OrderLog } from "@/app/components/sim/OrderLog";
 import { PriceChart } from "@/app/components/sim/PriceChart";
 import { Button } from "@/app/components/ui/Button";
 import { LiveDot } from "@/app/components/ui/LiveDot";
@@ -17,15 +17,14 @@ import { Tag } from "@/app/components/ui/Tag";
 import { useExchange } from "@/app/lib/exchange/useExchange";
 import { injectHeadline } from "@/app/lib/news/api";
 import { useNews } from "@/app/lib/news/useNews";
-import { useSimulation } from "@/app/lib/sim/useSimulation";
+
+// Cold-start placeholders shown only until the SSE `reset` event lands. The
+// backend always primes that envelope on connect, so this is just to avoid a
+// brief "—" flash on the very first paint.
+const PLACEHOLDER_TICKER = "NVDA";
+const PLACEHOLDER_NAME = "NVIDIA Corp";
 
 export default function SimPage() {
-  const [paused, setPaused] = useState(false);
-  const { snapshot, controls } = useSimulation({
-    ticker: "NVDA",
-    startPrice: 142.18,
-    tickMs: 280,
-  });
   const {
     snapshot: exchangeSnapshot,
     connected: exchangeConnected,
@@ -33,22 +32,23 @@ export default function SimPage() {
     openPrice: exchangeOpenPrice,
     lastTrade: exchangeLastTrade,
     priceAt: exchangePriceAt,
+    orderLog,
+    agents,
+    lastByAgent,
+    state: exchangeState,
   } = useExchange();
+
+  const ticker = exchangeState?.ticker ?? PLACEHOLDER_TICKER;
+  const tickerName = exchangeState?.name ?? PLACEHOLDER_NAME;
   const { headlines, connected: newsConnected } = useNews();
 
-  const onInjectHeadline = useCallback(
-    (title: string) => {
-      // Mirror to the legacy mock (drives existing decision animations) AND publish
-      // to the backend so real agents see the same anchored headline.
-      controls.injectHeadline(title);
-      injectHeadline({ source: "user", headline: title }).catch((err) => {
-        console.error("news inject failed", err);
-      });
-    },
-    [controls],
-  );
+  const onInjectHeadline = useCallback((title: string) => {
+    injectHeadline({ source: "user", headline: title }).catch((err) => {
+      console.error("news inject failed", err);
+    });
+  }, []);
 
-  // Header price/change is now driven by the backend exchange (fair price), not the mock.
+  // Header price/change is driven by the backend exchange (fair price).
   const headerPrice = exchangeSnapshot?.fair ?? null;
   const headerOpen = exchangeOpenPrice;
   const change =
@@ -58,28 +58,32 @@ export default function SimPage() {
       ? (change / headerOpen) * 100
       : 0;
 
-  const cohortStats = useMemo(() => {
-    if (!snapshot) return { agents: 0, decisions: 0, news: 0, tps: 0 };
-    const recentDecisions = snapshot.decisions.filter(
-      (d) => d.ts > snapshot.simulatedAt - 1000,
-    ).length;
-    return {
-      agents: snapshot.agents.length,
-      decisions: snapshot.decisions.length,
-      news: snapshot.news.length,
-      tps: recentDecisions,
-    };
-  }, [snapshot]);
+  // 2 Hz wall-clock tick used by the Dec/s window. Kept as state instead of
+  // `Date.now()` inside useMemo so the memo body stays pure (React 19 rule),
+  // and so the value naturally decays to 0 when decisions stop coming in.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
 
-  const togglePause = () => {
-    if (paused) {
-      controls.resume();
-      setPaused(false);
-    } else {
-      controls.pause();
-      setPaused(true);
-    }
-  };
+  // Inline header stats — all sourced from the real exchange + roster.
+  const cohortStats = useMemo(() => {
+    const recent = orderLog.filter((d) => d.ts > nowMs - 1000).length;
+    return {
+      agents: agents.length,
+      decisions: orderLog.length,
+      news: headlines.length,
+      tps: recent,
+      cycle: exchangeSnapshot?.event_tick ?? 0,
+    };
+  }, [
+    agents.length,
+    orderLog,
+    headlines.length,
+    exchangeSnapshot?.event_tick,
+    nowMs,
+  ]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg)] text-[var(--color-fg)]">
@@ -99,11 +103,9 @@ export default function SimPage() {
         <div className="hidden h-6 w-px bg-[var(--color-line)] sm:block" />
 
         <div className="flex items-baseline gap-3">
-          <h1 className="text-base font-semibold tracking-tight">
-            {snapshot?.ticker ?? "NVDA"}
-          </h1>
+          <h1 className="text-base font-semibold tracking-tight">{ticker}</h1>
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)] md:inline">
-            NVIDIA Corp · single-name
+            {tickerName} · single-name
           </span>
         </div>
 
@@ -133,18 +135,15 @@ export default function SimPage() {
           <InlineStat label="Agents" value={cohortStats.agents} />
           <InlineStat label="Dec/s" value={cohortStats.tps} />
           <InlineStat label="Headlines" value={cohortStats.news} />
-          <InlineStat label="Cycle" value={snapshot?.cycle ?? 0} />
+          <InlineStat label="Cycle" value={cohortStats.cycle} />
 
           <div className="hidden h-6 w-px bg-[var(--color-line)] sm:block" />
 
           <LiveDot
-            tone={paused ? "paused" : "live"}
-            label={paused ? "Paused" : "Live"}
+            tone={exchangeConnected ? "live" : "paused"}
+            label={exchangeConnected ? "Live" : "Connecting"}
           />
-          <Tag tone="muted">tickMs 280</Tag>
-          <Button variant="outline" size="sm" onClick={togglePause}>
-            {paused ? "Resume" : "Pause"}
-          </Button>
+          <Tag tone="muted">tickMs 200</Tag>
           <Button
             variant="ghost"
             size="sm"
@@ -164,8 +163,8 @@ export default function SimPage() {
             caption={`${cohortStats.agents} agents · cohort layout`}
             right={
               <LiveDot
-                label={paused ? "Paused" : "Acting"}
-                tone={paused ? "paused" : "live"}
+                label={exchangeConnected ? "Acting" : "Connecting"}
+                tone={exchangeConnected ? "live" : "paused"}
               />
             }
             flush
@@ -173,14 +172,14 @@ export default function SimPage() {
             bodyClassName="min-h-0 flex-1 bg-grid-fine"
           >
             <AgentSwarm
-              agents={snapshot?.agents ?? []}
-              decisions={snapshot?.decisions ?? []}
+              agents={agents}
+              lastByAgent={lastByAgent}
               height={240}
             />
           </Panel>
         </div>
 
-        {/* Center column · chart + order tape */}
+        {/* Center column · chart + order book */}
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5">
           <Panel
             title="Price action"
@@ -198,7 +197,7 @@ export default function SimPage() {
               <PriceChart
                 prices={exchangePricePoints}
                 news={[]}
-                ticker={snapshot?.ticker ?? "FAIR"}
+                ticker={ticker}
                 openPrice={exchangeOpenPrice}
               />
             ) : (
@@ -227,7 +226,7 @@ export default function SimPage() {
           </Panel>
         </div>
 
-        {/* Right column · news (compose + tape) + reasoning */}
+        {/* Right column · news (compose + tape) + order log */}
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
           <Panel
             title="News"
@@ -266,14 +265,14 @@ export default function SimPage() {
           </Panel>
 
           <Panel
-            title="Agent reasoning"
+            title="Order log"
             caption="streaming"
-            right={<Tag tone="neutral">{snapshot?.decisions.length ?? 0}</Tag>}
+            right={<Tag tone="neutral">{cohortStats.decisions}</Tag>}
             flush
             className="min-h-0 flex-1"
             bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
           >
-            <AgentReasoning decisions={snapshot?.decisions ?? []} />
+            <OrderLog entries={orderLog} />
           </Panel>
         </div>
       </main>

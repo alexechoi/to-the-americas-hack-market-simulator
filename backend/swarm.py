@@ -6,13 +6,14 @@ seconds). Per iteration the task:
 
     1. Snapshots the world for this persona (``build_trader_context``).
     2. Calls the cached pydantic-ai trader Agent (``build_trader_agent``).
-    3. If the decision is non-hold, records the persona+reasoning as a pending
-       intent via ``ExchangeRuntime.record_intent`` and queues the order via
-       ``Exchange.submit`` (so concurrent agents are shuffled fairly inside
-       the same event tick — never wall-clock raced). The eventual fill is
-       emitted to the trade-log SSE stream by the runtime, with reasoning
-       attached. Holds and killed orders never appear in the trade log because
-       they are not trades.
+    3. Broadcasts the decision to the order-log SSE stream via
+       ``ExchangeRuntime.record_decision`` — every BUY, SELL, **and HOLD** is
+       visible in the UI, with persona + reasoning attached.
+    4. If the decision is non-hold, queues the order via ``Exchange.submit`` so
+       concurrent agents are shuffled fairly inside the same event tick (never
+       wall-clock raced). Killed orders still appear in the order log as their
+       original decision; the eventual fill flows through the snapshot's
+       ``recent_trades`` feed for the order-book panel.
 
 A single bad turn must not kill the loop — every iteration is wrapped in
 try/except so a parse failure or transient gateway error is logged and the
@@ -188,13 +189,13 @@ class AgentSwarmRuntime:
             )
             result = await agent.run(TURN_PROMPT, deps=ctx)
             decision: TraderDecision = result.output
+            # Broadcast every decision (including HOLDs) to the order-log SSE
+            # stream. This is the single source of truth for the UI panel —
+            # killed orders are also represented here as their original decision.
+            exchange_runtime.record_decision(persona, decision)
             qty = decision.to_signed_qty()
             if qty == 0:
-                # HOLD — not a trade, nothing to log. The reasoning is dropped.
                 return
-            # Record reasoning *before* submit so we can never receive the fill
-            # (next event tick) without a matching pending intent in the queue.
-            exchange_runtime.record_intent(persona, decision)
             exchange_runtime.exchange.submit(
                 Order(
                     agent_id=persona.agent_id,

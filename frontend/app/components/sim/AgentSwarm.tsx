@@ -2,24 +2,32 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ARCHETYPES } from "@/app/lib/sim/archetypes";
-import type { Agent, AgentArchetype, AgentDecision } from "@/app/lib/sim/types";
+import {
+  type Archetype,
+  ARCHETYPE_META,
+  type ArchetypeMeta,
+  archetypeMeta,
+  TIERS,
+} from "@/app/lib/exchange/archetypes";
+import type { BackendAgent, OrderLogEntry } from "@/app/lib/exchange/types";
 
 interface AgentSwarmProps {
-  agents: Agent[];
-  decisions: AgentDecision[];
+  agents: BackendAgent[];
+  /** Latest order-log entry per agent_id — pulses the matching dot. */
+  lastByAgent: Map<string, OrderLogEntry>;
   height?: number;
 }
 
 /**
- * Each agent is a fixed point on a honeycomb-packed grid, clustered by
- * reaction-speed tier. When an agent acts, the dot pulses in its side colour
- * and an orbit ring appears for ~800ms. Layout is resize-aware so the swarm
- * fills its container in tall, wide, or square panels.
+ * Each agent is a fixed point on a packed grid, clustered by reaction-speed
+ * tier. When an agent decides something the matching dot pulses in its action
+ * colour (BUY=up, SELL=down, HOLD=muted) and an orbit ring appears for ~800ms.
+ * Layout is resize-aware so the swarm fills its container in tall, wide, or
+ * square panels.
  */
 export function AgentSwarm({
   agents,
-  decisions,
+  lastByAgent,
   height = 240,
 }: AgentSwarmProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -31,16 +39,6 @@ export function AgentSwarm({
     () => layoutAgents(agents, size.w, size.h),
     [agents, size.w, size.h],
   );
-
-  // map of agentId → most recent decision timestamp (for pulse)
-  const lastByAgent = useMemo(() => {
-    const m = new Map<string, { ts: number; side: AgentDecision["side"] }>();
-    for (const d of decisions) {
-      const prev = m.get(d.agentId);
-      if (!prev || d.ts > prev.ts) m.set(d.agentId, { ts: d.ts, side: d.side });
-    }
-    return m;
-  }, [decisions]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -98,14 +96,14 @@ export function AgentSwarm({
         const cx = node.x * dpr;
         const cy = node.y * dpr;
         const r = 3.4 * dpr;
-        const last = lastByAgent.get(node.agent.id);
+        const last = lastByAgent.get(node.agent.agent_id);
         const recent = last ? Math.max(0, 800 - (wallNow - last.ts)) : 0;
         const pulse = recent / 800;
-        const baseColor = colourFor(node.agent.archetype);
+        const baseColor = archetypeMeta(node.agent.archetype).color;
         const sideColor =
-          last?.side === "buy"
+          last?.action === "buy"
             ? "#b6f569"
-            : last?.side === "sell"
+            : last?.action === "sell"
               ? "#ff6e6e"
               : baseColor;
 
@@ -142,14 +140,14 @@ export function AgentSwarm({
 }
 
 interface SwarmNode {
-  agent: Agent;
+  agent: BackendAgent;
   x: number;
   y: number;
 }
 
 interface SwarmCluster {
   label: string;
-  archetype: AgentArchetype;
+  tier: ArchetypeMeta["tier"];
   x: number;
   y: number;
   w: number;
@@ -157,24 +155,21 @@ interface SwarmCluster {
   count: number;
 }
 
+function tierFor(arch: string): ArchetypeMeta["tier"] {
+  if (arch in ARCHETYPE_META) {
+    return ARCHETYPE_META[arch as Archetype].tier;
+  }
+  return "discretionary";
+}
+
 function layoutAgents(
-  agents: Agent[],
+  agents: BackendAgent[],
   containerW: number,
   containerH: number,
 ): {
   nodes: SwarmNode[];
   clusters: SwarmCluster[];
 } {
-  const tiers: { label: string; archetypes: AgentArchetype[] }[] = [
-    { label: "Algo · sub-second", archetypes: ["hft", "gamma"] },
-    { label: "Mechanical · seconds", archetypes: ["cta"] },
-    {
-      label: "Discretionary · minutes",
-      archetypes: ["macro", "long_only", "contrarian", "treasury"],
-    },
-    { label: "Retail · slow", archetypes: ["retail"] },
-  ];
-
   const gutter = 12;
   // In tall/narrow panels stack tiers as rows; in wide panels split as columns.
   const stackVertical = containerH / Math.max(1, containerW) > 0.85;
@@ -183,18 +178,16 @@ function layoutAgents(
   const nodes: SwarmNode[] = [];
 
   if (stackVertical) {
-    const rowH = (containerH - gutter * (tiers.length + 1)) / tiers.length;
-    tiers.forEach((tier, ti) => {
-      const tierAgents = agents.filter((a) =>
-        tier.archetypes.includes(a.archetype),
-      );
+    const rowH = (containerH - gutter * (TIERS.length + 1)) / TIERS.length;
+    TIERS.forEach((tier, ti) => {
+      const tierAgents = agents.filter((a) => tierFor(a.archetype) === tier.id);
       const x = gutter;
       const y = gutter + ti * (rowH + gutter);
       const w = containerW - gutter * 2;
       const h = rowH;
       clusters.push({
         label: tier.label,
-        archetype: tier.archetypes[0],
+        tier: tier.id,
         x,
         y,
         w,
@@ -204,18 +197,16 @@ function layoutAgents(
       packIntoCluster(tierAgents, nodes, x, y, w, h);
     });
   } else {
-    const colW = (containerW - gutter * (tiers.length + 1)) / tiers.length;
-    tiers.forEach((tier, ti) => {
-      const tierAgents = agents.filter((a) =>
-        tier.archetypes.includes(a.archetype),
-      );
+    const colW = (containerW - gutter * (TIERS.length + 1)) / TIERS.length;
+    TIERS.forEach((tier, ti) => {
+      const tierAgents = agents.filter((a) => tierFor(a.archetype) === tier.id);
       const x = gutter + ti * (colW + gutter);
       const y = gutter;
       const w = colW;
       const h = containerH - gutter * 2;
       clusters.push({
         label: tier.label,
-        archetype: tier.archetypes[0],
+        tier: tier.id,
         x,
         y,
         w,
@@ -230,7 +221,7 @@ function layoutAgents(
 }
 
 function packIntoCluster(
-  tierAgents: Agent[],
+  tierAgents: BackendAgent[],
   nodes: SwarmNode[],
   cx: number,
   cy: number,
@@ -260,22 +251,6 @@ function packIntoCluster(
     const y = innerY + r * cellH + cellH / 2;
     nodes.push({ agent, x, y });
   });
-}
-
-function colourFor(arch: AgentArchetype): string {
-  const map: Record<AgentArchetype, string> = {
-    hft: "#71717a",
-    gamma: "#a1a1aa",
-    cta: "#737373",
-    macro: "#9ca3af",
-    long_only: "#a3a3a3",
-    contrarian: "#a8a29e",
-    treasury: "#737373",
-    retail: "#52525b",
-  };
-  // Touch ARCHETYPES so tree-shaker keeps the import (and to validate keys)
-  void ARCHETYPES;
-  return map[arch];
 }
 
 function withAlpha(hex: string, alpha: number): string {

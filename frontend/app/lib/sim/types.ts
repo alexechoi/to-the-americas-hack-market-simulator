@@ -1,3 +1,15 @@
+/**
+ * Legacy mock types — left in place for the orphan components in
+ * `app/components/sim/` (ScenarioTable, OrderTape, NewsFeed, CohortLegend)
+ * that the live `/sim` page no longer imports.
+ *
+ * The live exchange path uses `app/lib/exchange/types.ts`. Do not add new
+ * shapes here unless you're reviving one of the orphan components.
+ *
+ * `PricePoint` moved to `app/lib/exchange/types.ts` since it now describes a
+ * server-driven sample, not a mock-engine sample.
+ */
+
 export type AgentArchetype =
   | "hft"
   | "macro"
@@ -42,13 +54,6 @@ export interface AgentDecision {
   ts: number;
 }
 
-export interface PricePoint {
-  t: number;
-  price: number;
-  volume: number;
-  realPrice?: number; // optional comparison line
-}
-
 export interface NewsHeadline {
   id: string;
   ts: number;
@@ -64,19 +69,4 @@ export interface ScenarioRow {
   probability: number;
   expectedMove: number; // % move
   variance: number; // dispersion across agents
-}
-
-export interface SimSnapshot {
-  ticker: string;
-  price: number;
-  openPrice: number;
-  realPrice?: number;
-  prices: PricePoint[];
-  agents: Agent[];
-  decisions: AgentDecision[];
-  news: NewsHeadline[];
-  scenarios: ScenarioRow[];
-  paused: boolean;
-  cycle: number;
-  simulatedAt: number;
 }

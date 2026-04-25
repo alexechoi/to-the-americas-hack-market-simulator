@@ -49,9 +49,9 @@ class Exchange:
         self._pending: list[Order] = []
         self._accounts: dict[str, Account] = {}
         self._recent_trades: deque[Fill] = deque(maxlen=recent_trades_cap)
-        # Fills produced by the most recent tick(). Read by the runtime to emit
-        # one trade_log SSE event per fresh fill (vs. the rolling _recent_trades
-        # buffer that re-publishes old fills on every snapshot).
+        # Fills produced by the most recent tick(). Available for any consumer
+        # that wants to react to the *new* fills only, vs. the rolling
+        # _recent_trades buffer that re-publishes old fills on every snapshot.
         self.last_tick_fills: tuple[Fill, ...] = ()
 
         # Price history — append-only list of PricePoints, one per fair mutation.
@@ -125,8 +125,8 @@ class Exchange:
         mutating MM fair and agent ledgers between fills.
 
         Side-effect: ``self.last_tick_fills`` is rebuilt to hold only the fills
-        produced by *this* tick (in execution order), so the runtime can emit
-        one trade_log event per fresh fill without diffing the rolling buffer.
+        produced by *this* tick (in execution order), so consumers can react to
+        fresh fills without diffing the rolling buffer.
         """
         self._tick_id += 1
         new_fills: list[Fill] = []
