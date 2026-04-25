@@ -49,58 +49,116 @@ export function OrderBook({ snapshot, agentId = "manual" }: OrderBookProps) {
 
 // ---------- ladder ----------
 
-function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
-  const { ladder, fair, best_bid, best_ask } = snapshot;
+interface AnnotatedLevel extends LadderLevel {
+  cumSize: number;
+  cumDollar: number;
+}
 
-  // Reverse asks so the level closest to the inside renders nearest the spread line.
+const GRID_COLS = "grid-cols-[64px_1fr_1fr_1fr]";
+
+function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
+  const { ladder, best_bid, best_ask, recent_trades } = snapshot;
+  const last =
+    recent_trades.length > 0
+      ? recent_trades[recent_trades.length - 1].vwap
+      : null;
+
+  // Asks: server delivers ascending; reverse so worst ask renders at top, best ask at bottom (touching the spread row).
   const asksTopDown = useMemo(() => [...ladder.asks].reverse(), [ladder.asks]);
 
-  const maxSize = useMemo(() => {
+  // Cumulate from the inside out so the row nearest the spread reads its own size,
+  // and rows further away read the running total (mirrors Polymarket's TOTAL column).
+  const asksAnnotated = useMemo<AnnotatedLevel[]>(() => {
+    const out = asksTopDown.map((lvl) => ({
+      ...lvl,
+      cumSize: 0,
+      cumDollar: 0,
+    }));
+    let cumSize = 0;
+    let cumDollar = 0;
+    for (let i = out.length - 1; i >= 0; i--) {
+      cumSize += out[i].size;
+      cumDollar += out[i].size * out[i].price;
+      out[i].cumSize = cumSize;
+      out[i].cumDollar = cumDollar;
+    }
+    return out;
+  }, [asksTopDown]);
+
+  const bidsAnnotated = useMemo<AnnotatedLevel[]>(() => {
+    const out = ladder.bids.map((lvl) => ({
+      ...lvl,
+      cumSize: 0,
+      cumDollar: 0,
+    }));
+    let cumSize = 0;
+    let cumDollar = 0;
+    for (let i = 0; i < out.length; i++) {
+      cumSize += out[i].size;
+      cumDollar += out[i].size * out[i].price;
+      out[i].cumSize = cumSize;
+      out[i].cumDollar = cumDollar;
+    }
+    return out;
+  }, [ladder.bids]);
+
+  const maxCum = useMemo(() => {
     let m = 1;
-    for (const lvl of ladder.bids) if (lvl.size > m) m = lvl.size;
-    for (const lvl of ladder.asks) if (lvl.size > m) m = lvl.size;
+    for (const a of asksAnnotated) if (a.cumSize > m) m = a.cumSize;
+    for (const b of bidsAnnotated) if (b.cumSize > m) m = b.cumSize;
     return m;
-  }, [ladder]);
+  }, [asksAnnotated, bidsAnnotated]);
+
+  const spread = best_ask - best_bid;
+  const bestAskIdx = asksAnnotated.length - 1;
 
   return (
     <div className="flex h-full min-h-0 flex-col font-mono text-[11px] tabular-nums">
-      <div className="grid shrink-0 grid-cols-[1fr_60px_72px] gap-x-3 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
-        <span>Depth</span>
-        <span className="text-right">Size</span>
+      <div
+        className={`grid shrink-0 ${GRID_COLS} gap-x-3 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]`}
+      >
+        <span>Trade</span>
         <span className="text-right">Price</span>
+        <span className="text-right">Shares</span>
+        <span className="text-right">Total</span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-1 flex-col-reverse overflow-hidden">
-          {asksTopDown.map((lvl, i) => (
+          {asksAnnotated.map((lvl, i) => (
             <Row
               key={`a-${i}-${lvl.price}`}
               level={lvl}
-              maxSize={maxSize}
+              maxCum={maxCum}
               tone="ask"
+              isBest={i === bestAskIdx}
             />
           ))}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between border-y border-[var(--color-line)] bg-[var(--color-surface-2)] px-4 py-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
-            Fair
+        <div className="flex shrink-0 items-center gap-3 border-y border-[var(--color-line)] bg-[var(--color-surface-2)] px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+          <span>
+            Last:{" "}
+            <span className="text-[var(--color-fg-muted)]">
+              {last !== null ? last.toFixed(2) : "—"}
+            </span>
           </span>
-          <span className="font-mono text-sm tabular-nums text-[var(--color-fg)]">
-            {fair.toFixed(2)}
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
-            spread {(best_ask - best_bid).toFixed(2)}
+          <span className="ml-auto">
+            Spread:{" "}
+            <span className="text-[var(--color-fg-muted)]">
+              {spread.toFixed(2)}
+            </span>
           </span>
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          {ladder.bids.map((lvl, i) => (
+          {bidsAnnotated.map((lvl, i) => (
             <Row
               key={`b-${i}-${lvl.price}`}
               level={lvl}
-              maxSize={maxSize}
+              maxCum={maxCum}
               tone="bid"
+              isBest={i === 0}
             />
           ))}
         </div>
@@ -111,35 +169,58 @@ function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
 
 function Row({
   level,
-  maxSize,
+  maxCum,
   tone,
+  isBest,
 }: {
-  level: LadderLevel;
-  maxSize: number;
+  level: AnnotatedLevel;
+  maxCum: number;
   tone: "bid" | "ask";
+  isBest: boolean;
 }) {
-  const pct = Math.max(0, Math.min(1, level.size / maxSize));
+  const pct = Math.max(0, Math.min(1, level.cumSize / maxCum));
   const color = tone === "bid" ? "var(--color-up)" : "var(--color-down)";
   return (
-    <div className="relative grid grid-cols-[1fr_60px_72px] items-center gap-x-3 px-4 py-[3px]">
+    <div
+      className={`relative grid ${GRID_COLS} items-center gap-x-3 px-4 py-[3px]`}
+    >
       <div
         className="pointer-events-none absolute inset-y-0 right-0"
         style={{
           width: `${pct * 100}%`,
-          background:
-            tone === "bid"
-              ? "linear-gradient(to left, color-mix(in oklab, var(--color-up) 18%, transparent), transparent)"
-              : "linear-gradient(to left, color-mix(in oklab, var(--color-down) 18%, transparent), transparent)",
+          background: `linear-gradient(to left, color-mix(in oklab, ${color} 22%, transparent), color-mix(in oklab, ${color} 6%, transparent))`,
         }}
       />
-      <span className="relative" />
-      <span className="relative text-right text-[var(--color-fg-muted)]">
-        {level.size.toLocaleString()}
-      </span>
+      <span className="relative">{isBest && <SidePill tone={tone} />}</span>
       <span className="relative text-right" style={{ color }}>
         {level.price.toFixed(2)}
       </span>
+      <span className="relative text-right text-[var(--color-fg-muted)]">
+        {level.size.toLocaleString()}
+      </span>
+      <span className="relative text-right text-[var(--color-fg)]">
+        $
+        {level.cumDollar.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </span>
     </div>
+  );
+}
+
+function SidePill({ tone }: { tone: "bid" | "ask" }) {
+  const color = tone === "bid" ? "var(--color-up)" : "var(--color-down)";
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-sm px-1.5 py-[1px] font-mono text-[9px] uppercase tracking-[0.14em]"
+      style={{
+        background: `color-mix(in oklab, ${color} 18%, transparent)`,
+        color,
+      }}
+    >
+      {tone === "ask" ? "Asks" : "Bids"}
+    </span>
   );
 }
 
@@ -213,8 +294,20 @@ function SubmitFOK({
     setStatus(null);
     try {
       const signed = side === "buy" ? Math.abs(qty) : -Math.abs(qty);
-      await submitOrder({ agent_id: agentId, limit, qty: signed });
-      setStatus(`queued ${side} ×${qty} @ ${limit.toFixed(2)}`);
+      const result = await submitOrder({
+        agent_id: agentId,
+        limit,
+        qty: signed,
+      });
+      if (result.status === "filled") {
+        setStatus(
+          `filled ${side} ×${Math.abs(result.qty)} @ ${result.vwap.toFixed(2)}`,
+        );
+      } else if (result.status === "killed") {
+        setStatus(`killed: ${humanizeReason(result.reason)}`);
+      } else {
+        setStatus("hold");
+      }
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "submit failed");
     } finally {
@@ -279,6 +372,17 @@ function SubmitFOK({
       )}
     </form>
   );
+}
+
+function humanizeReason(reason: string): string {
+  switch (reason) {
+    case "limit_not_crossed":
+      return "limit didn't cross the inside";
+    case "insufficient_liquidity":
+      return "not enough liquidity to fill in full";
+    default:
+      return reason;
+  }
 }
 
 const inputClass =

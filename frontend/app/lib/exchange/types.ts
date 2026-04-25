@@ -47,9 +47,18 @@ export interface OrderRequest {
   qty: number;
 }
 
-export interface OrderResponse {
-  queued: boolean;
-  agent_id: string;
-  limit: number;
-  qty: number;
-}
+/** Server-side outcome of a submitted FOK. Mirrors backend exchange_api._serialize_result. */
+export type OrderResult =
+  | {
+      status: "filled";
+      agent_id: string;
+      qty: number; // signed
+      vwap: number;
+      levels: LadderLevel[];
+    }
+  | {
+      status: "killed";
+      agent_id: string;
+      reason: "limit_not_crossed" | "insufficient_liquidity" | string;
+    }
+  | { status: "hold"; agent_id: string };

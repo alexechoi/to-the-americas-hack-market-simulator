@@ -77,9 +77,27 @@ class Exchange:
     # ------------------------------------------------------------------ order flow
 
     def submit(self, order: Order) -> None:
-        """Queue an FOK intent for the next event tick. Auto-registers the agent."""
+        """
+        Queue an FOK intent for the next event tick.
+
+        Use this from agent code where many agents act in the same turn — the queue
+        gets shuffled and serialized so no agent gets a first-mover advantage from
+        real wall-clock latency. For interactive / one-shot orders that should fire
+        immediately and return a result, use :meth:`execute_now` instead.
+        """
         self.register(order.agent_id)
         self._pending.append(order)
+
+    def execute_now(self, order: Order) -> OrderResult:
+        """
+        Execute an FOK against the current ladder *immediately* and return the result.
+
+        Bypasses the pending queue and the event-tick cadence. Useful for HTTP-driven
+        / human submissions where the caller wants to see filled/killed/hold without
+        waiting for the next event tick.
+        """
+        self.register(order.agent_id)
+        return self._execute(order)
 
     def tick(self, advance_event: bool = True) -> Snapshot:
         """

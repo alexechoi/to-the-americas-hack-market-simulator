@@ -23,11 +23,23 @@ export default function SimPage() {
     startPrice: 142.18,
     tickMs: 280,
   });
-  const { snapshot: exchangeSnapshot, connected: exchangeConnected } =
-    useExchange();
+  const {
+    snapshot: exchangeSnapshot,
+    connected: exchangeConnected,
+    pricePoints: exchangePricePoints,
+    openPrice: exchangeOpenPrice,
+    lastTrade: exchangeLastTrade,
+  } = useExchange();
 
-  const change = snapshot ? snapshot.price - snapshot.openPrice : 0;
-  const changePct = snapshot ? (change / snapshot.openPrice) * 100 : 0;
+  // Header price/change is now driven by the backend exchange (fair price), not the mock.
+  const headerPrice = exchangeSnapshot?.fair ?? null;
+  const headerOpen = exchangeOpenPrice;
+  const change =
+    headerPrice !== null && headerOpen !== null ? headerPrice - headerOpen : 0;
+  const changePct =
+    headerPrice !== null && headerOpen !== null && headerOpen !== 0
+      ? (change / headerOpen) * 100
+      : 0;
 
   const cohortStats = useMemo(() => {
     if (!snapshot) return { agents: 0, decisions: 0, news: 0, tps: 0 };
@@ -80,7 +92,7 @@ export default function SimPage() {
 
         <div className="flex items-baseline gap-2 font-mono tabular-nums">
           <span className="text-xl tracking-tight text-[var(--color-fg)]">
-            {snapshot?.price.toFixed(2) ?? "—"}
+            {headerPrice !== null ? headerPrice.toFixed(2) : "—"}
           </span>
           <span
             className="text-xs"
@@ -92,6 +104,12 @@ export default function SimPage() {
             {change.toFixed(2)} ({changePct >= 0 ? "+" : ""}
             {changePct.toFixed(2)}%)
           </span>
+          {exchangeLastTrade && (
+            <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)] xl:inline">
+              last fill {exchangeLastTrade.vwap.toFixed(2)} ×
+              {Math.abs(exchangeLastTrade.qty)}
+            </span>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-5">
@@ -149,24 +167,30 @@ export default function SimPage() {
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5">
           <Panel
             title="Price action"
-            caption={`${snapshot?.prices.length ?? 0} ticks`}
+            caption={`${exchangePricePoints.length} ticks · fair`}
             right={
               <div className="flex items-center gap-2">
-                <Tag tone="neutral">AMM · √-impact</Tag>
-                <Tag tone="muted">cycle {snapshot?.cycle ?? 0}</Tag>
+                <Tag tone="neutral">Kyle λ · depth-weighted</Tag>
+                <Tag tone="muted">evt {exchangeSnapshot?.event_tick ?? 0}</Tag>
               </div>
             }
             flush
             className="min-h-0 flex-[1.8]"
             bodyClassName="min-h-0 flex-1 bg-grid-fine relative"
           >
-            {snapshot && (
+            {exchangePricePoints.length >= 2 && exchangeOpenPrice !== null ? (
               <PriceChart
-                prices={snapshot.prices}
-                news={snapshot.news}
-                ticker={snapshot.ticker}
-                openPrice={snapshot.openPrice}
+                prices={exchangePricePoints}
+                news={[]}
+                ticker={snapshot?.ticker ?? "FAIR"}
+                openPrice={exchangeOpenPrice}
               />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-[var(--color-fg-faint)]">
+                {exchangeConnected
+                  ? "Buffering ticks…"
+                  : "Connecting to exchange…"}
+              </div>
             )}
           </Panel>
 

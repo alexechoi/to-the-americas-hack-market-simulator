@@ -13,7 +13,7 @@ import type {
   Account,
   ExchangeSnapshot,
   OrderRequest,
-  OrderResponse,
+  OrderResult,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -32,8 +32,8 @@ async function fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function submitOrder(req: OrderRequest): Promise<OrderResponse> {
-  return fetchJson<OrderResponse>("/exchange/orders", {
+export async function submitOrder(req: OrderRequest): Promise<OrderResult> {
+  return fetchJson<OrderResult>("/exchange/orders", {
     method: "POST",
     body: JSON.stringify(req),
   });

@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from exchange.types import Order
+from exchange.types import Fill, Hold, Killed, Order, OrderResult
 from runtime import _serialize_snapshot, runtime
 
 logger = logging.getLogger(__name__)
@@ -51,14 +52,42 @@ def get_account(agent_id: str):
     }
 
 
+def _serialize_result(result: OrderResult) -> dict[str, Any]:
+    """Convert an OrderResult dataclass to a JSON-friendly dict for the wire."""
+    if isinstance(result, Fill):
+        return {
+            "status": "filled",
+            "agent_id": result.agent_id,
+            "qty": result.qty,
+            "vwap": result.vwap,
+            "levels": [{"price": p, "size": s} for p, s in result.levels],
+        }
+    if isinstance(result, Killed):
+        return {
+            "status": "killed",
+            "agent_id": result.agent_id,
+            "reason": result.reason,
+        }
+    if isinstance(result, Hold):
+        return {"status": "hold", "agent_id": result.agent_id}
+    raise TypeError(f"unknown OrderResult: {result!r}")
+
+
 @router.post("/orders")
-def submit_order(req: OrderRequest):
-    """Queue an FOK order. It'll be processed on the next event tick."""
+async def submit_order(req: OrderRequest) -> dict[str, Any]:
+    """
+    Submit a Fill-Or-Kill order and execute it immediately against the current ladder.
+
+    Returns the actual outcome (filled / killed / hold). The trade also lands in the
+    SSE stream's recent_trades within the next backend tick.
+    """
     if abs(req.qty) > 1_000_000:
         raise HTTPException(status_code=400, detail="qty out of range")
     order = Order(agent_id=req.agent_id, limit=float(req.limit), qty=int(req.qty))
-    runtime.exchange.submit(order)
-    return {"queued": True, "agent_id": order.agent_id, "limit": order.limit, "qty": order.qty}
+    # Async handler runs on the event loop, so this is naturally serialized
+    # with the tick loop — no explicit lock needed.
+    result = runtime.exchange.execute_now(order)
+    return _serialize_result(result)
 
 
 @router.get("/stream")
