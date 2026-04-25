@@ -258,8 +258,8 @@ class TraderDecision(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, description="Self-rated 0..1 conviction.")
     reasoning: str = Field(
         min_length=1,
-        max_length=1_000,
-        description="One short paragraph; surfaced to the UI as a thought bubble.",
+        max_length=240,
+        description="ONE short sentence (~30 words); surfaced to the UI as a thought bubble.",
     )
 
     @model_validator(mode="after")
