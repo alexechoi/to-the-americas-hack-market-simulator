@@ -30,11 +30,14 @@ def configure_observability(*, service_name: str = "market-sim-backend") -> None
     if _CONFIGURED:
         return
 
+    has_token = bool(os.getenv("LOGFIRE_TOKEN"))
     logfire.configure(
         service_name=service_name,
         send_to_logfire="if-token-present",
         environment=os.getenv("ENVIRONMENT", "dev"),
-        console=logfire.ConsoleOptions(verbose=False),
+        # When a token is present, spans ship to the Logfire UI — printing each
+        # one to console is just noise (and floods badly with N agents ticking).
+        console=False if has_token else logfire.ConsoleOptions(verbose=False),
     )
 
     root = logging.getLogger()
@@ -44,7 +47,10 @@ def configure_observability(*, service_name: str = "market-sim-backend") -> None
     if not any(isinstance(h, logfire.LogfireLoggingHandler) for h in root.handlers):
         root.addHandler(handler)
 
-    logfire.instrument_pydantic()
+    # Intentionally NOT calling logfire.instrument_pydantic(): it emits a span per
+    # model validation, which floods stdout once N agents tick (TraderContext +
+    # TraderDecision = ~6 validate spans per turn × 6 agents × seconds). The
+    # pydantic-ai instrumentation below already covers the load-bearing LLM trace.
     logfire.instrument_pydantic_ai()
 
     _CONFIGURED = True
