@@ -15,10 +15,12 @@
   },
   "dependencies": {
     "@netlify/plugin-nextjs": "^5.15.9",
+    "@paper-design/shaders-react": "^0.0.76",
     "eslint-plugin-eslint-comments": "^3.2.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "firebase": "^12.11.0",
     "firebase-admin": "^13.7.0",
+    "motion": "^12.38.0",
     "next": "16.1.0",
     "prettier": "^3.8.1",
     "react": "19.2.3",
