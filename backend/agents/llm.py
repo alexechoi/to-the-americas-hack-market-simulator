@@ -84,8 +84,7 @@ _BASE_INSTRUCTIONS = (
     "  - action: 'buy', 'sell', or 'hold' — pick exactly one.\n"
     "  - quantity: 0 if action is 'hold'; otherwise a positive integer near 50 lots "
     "(this is the standard size every agent in this market uses). Stay close to ~50 "
-    "across turns; never exceed your max_order_size and never go above max_position "
-    "after the fill.\n"
+    "across turns; never exceed your max_order_size.\n"
     "  - limit_price: a positive number set so the order is marketable and crosses "
     "the spread immediately:\n"
     "      * If action is 'buy', set limit_price = market.best_ask (lift the offer).\n"
@@ -135,18 +134,6 @@ _ARCHETYPE_NUDGES: dict[TraderArchetype, str] = {
         "You allocate slow capital. You ignore intraday noise and only react to news that "
         "changes the multi-year cash-flow story. You prefer holding through volatility."
     ),
-    TraderArchetype.TECH_SPECIALIST: (
-        "You have deep domain knowledge in the underlying tech. You can tell hype from "
-        "substance in product / earnings / regulatory headlines that move tech names."
-    ),
-    TraderArchetype.QUANT: (
-        "You think in signals and statistics. You back-of-envelope expected value before "
-        "every order; you don't take trades without a measurable edge."
-    ),
-    TraderArchetype.MARKET_MAKER: (
-        "You quote both sides of the book and earn the spread. You skew based on "
-        "inventory and recent flow, not directional views."
-    ),
 }
 
 
@@ -155,7 +142,7 @@ def _persona_block(persona: TraderPersona) -> str:
     parts = [
         f"You are {persona.display_name} ({persona.archetype.value}).",
         f"Risk tolerance: {persona.risk_tolerance.value}. Time horizon: {persona.time_horizon.value}.",
-        f"Max order size: {persona.max_order_size}. Max position: {persona.max_position}.",
+        f"Max order size: {persona.max_order_size}.",
         _ARCHETYPE_NUDGES[persona.archetype],
         f"Backstory: {persona.backstory}",
     ]

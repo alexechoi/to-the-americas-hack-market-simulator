@@ -27,27 +27,23 @@ export function HeadlineInjector({ onInject, flush }: HeadlineInjectorProps) {
     : "border border-[var(--color-line-strong)] bg-[var(--color-surface-2)]";
 
   return (
-    <div className={wrapperClass}>
+    <div className={`flex items-end gap-2 px-3 py-2 ${wrapperClass}`}>
       <textarea
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
-          // Plain Enter sends; Shift+Enter inserts a newline (standard chat ergonomics).
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             submit();
           }
         }}
-        placeholder="Type a headline · ↵ to inject · ⇧↵ for newline"
+        placeholder="Type a headline…"
         rows={2}
-        className="block w-full resize-none bg-transparent px-3 py-2.5 text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-faint)] focus:outline-none"
+        className="flex-1 resize-none bg-transparent text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-faint)] focus:outline-none"
       />
-      <div className="flex items-center justify-end border-t border-[var(--color-line)] px-3 py-2">
-        <Button size="sm" onClick={submit} disabled={!title.trim()}>
-          Inject
-          <span aria-hidden>↵</span>
-        </Button>
-      </div>
+      <Button size="sm" onClick={submit} disabled={!title.trim()}>
+        Inject
+      </Button>
     </div>
   );
 }

@@ -230,11 +230,7 @@ export default function SimPage() {
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
           <Panel
             title="News"
-            caption={
-              headlines.length
-                ? `${headlines.length} on tape · ↵ to inject`
-                : "↵ to inject"
-            }
+            caption={undefined}
             right={
               <LiveDot
                 tone={newsConnected ? "live" : "paused"}

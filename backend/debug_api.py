@@ -79,7 +79,6 @@ def _sample_persona() -> TraderPersona:
         archetype=TraderArchetype.RETAIL,
         risk_tolerance=RiskTolerance.MODERATE,
         time_horizon=TimeHorizon.SHORT_TERM,
-        max_position=500,
         max_order_size=50,
         backstory="A vanilla retail trader used by the /debug endpoint.",
     )

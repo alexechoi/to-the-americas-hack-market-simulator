@@ -110,9 +110,7 @@ class AgentSwarmRuntime:
         self._agents[persona.agent_id] = managed
         # Pre-register with the exchange so the first observe() doesn't race
         # the first submit on account creation.
-        exchange_runtime.exchange.register(
-            persona.agent_id, initial_cash=persona.initial_cash
-        )
+        exchange_runtime.exchange.register(persona.agent_id)
         if self._started:
             self._spawn(managed)
 
