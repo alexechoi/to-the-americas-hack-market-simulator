@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 from auth import FirebaseUser, OptionalFirebaseUser  # noqa: E402
+from debug_api import router as debug_router  # noqa: E402
 from exchange_api import router as exchange_router  # noqa: E402
 from firebase_service import auto_initialize  # noqa: E402
 from notifications import router as notifications_router  # noqa: E402
@@ -56,6 +57,7 @@ app.add_middleware(
 # Include routers
 app.include_router(notifications_router)
 app.include_router(exchange_router)
+app.include_router(debug_router)
 
 
 # ============================================================================
