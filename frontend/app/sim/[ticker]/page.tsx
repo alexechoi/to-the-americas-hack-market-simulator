@@ -95,9 +95,13 @@ export default function TickerSimPage() {
   ]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg)] text-[var(--color-fg)]">
-      {/* Compact instrument bar — replaces site header on /sim */}
-      <header className="flex shrink-0 items-center gap-6 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-2.5">
+    // Mobile/tablet: natural document flow, the page scrolls. Desktop (lg+):
+    // locked-in cockpit — viewport height with no outer scroll. This avoids
+    // the "panels squashed to 0px because the parent is overflow-hidden but
+    // every column collapsed to col-span-12" trap we used to have.
+    <div className="flex min-h-dvh flex-col bg-[var(--color-bg)] text-[var(--color-fg)] lg:h-dvh lg:overflow-hidden">
+      {/* Compact instrument bar — wraps on small screens so it never overflows */}
+      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2.5 sm:gap-x-6 sm:px-5">
         <Link
           href="/"
           className="flex items-center gap-2 text-[var(--color-fg)] transition-colors hover:text-[var(--color-accent)]"
@@ -140,7 +144,7 @@ export default function TickerSimPage() {
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-5">
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-5">
           <InlineStat label="Agents" value={cohortStats.agents} />
           <InlineStat label="Dec/s" value={cohortStats.tps} />
           <InlineStat label="Headlines" value={cohortStats.news} />
@@ -152,7 +156,9 @@ export default function TickerSimPage() {
             tone={exchangeConnected ? "live" : "paused"}
             label={exchangeConnected ? "Live" : "Connecting"}
           />
-          <Tag tone="muted">tickMs 200</Tag>
+          <span className="hidden sm:inline-flex">
+            <Tag tone="muted">tickMs 200</Tag>
+          </span>
           <Button
             variant="ghost"
             size="sm"
@@ -163,10 +169,14 @@ export default function TickerSimPage() {
         </div>
       </header>
 
-      {/* Workspace fills remaining viewport */}
-      <main className="grid min-h-0 flex-1 grid-cols-12 gap-3 p-3">
+      {/* Workspace
+       * - Mobile/tablet: single column stack with explicit panel heights so
+       *   each panel has a usable size and the page scrolls naturally.
+       * - lg+: the original 12-col cockpit, locked to the remaining viewport
+       *   height. */}
+      <main className="grid grid-cols-1 gap-3 p-3 lg:min-h-0 lg:flex-1 lg:grid-cols-12 lg:overflow-hidden">
         {/* Left column · agent swarm hero */}
-        <div className="col-span-12 flex min-h-0 lg:col-span-4">
+        <div className="flex h-[360px] flex-col lg:col-span-4 lg:h-auto lg:min-h-0">
           <Panel
             title="Agent swarm"
             caption={`${cohortStats.agents} agents · cohort layout`}
@@ -189,17 +199,19 @@ export default function TickerSimPage() {
         </div>
 
         {/* Center column · chart + order book */}
-        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5">
+        <div className="flex flex-col gap-3 lg:col-span-5 lg:min-h-0">
           <Panel
             title="Price action"
             right={
               <div className="flex items-center gap-2">
-                <Tag tone="neutral">Kyle λ · depth-weighted</Tag>
+                <span className="hidden sm:inline-flex">
+                  <Tag tone="neutral">Kyle λ · depth-weighted</Tag>
+                </span>
                 <Tag tone="muted">evt {exchangeSnapshot?.event_tick ?? 0}</Tag>
               </div>
             }
             flush
-            className="min-h-0 flex-[1.8]"
+            className="h-[360px] lg:h-auto lg:min-h-0 lg:flex-[1.8]"
             bodyClassName="min-h-0 flex-1 bg-grid-fine relative"
           >
             {exchangePricePoints.length >= 2 && exchangeOpenPrice !== null ? (
@@ -228,7 +240,7 @@ export default function TickerSimPage() {
               />
             }
             flush
-            className="min-h-0 flex-1"
+            className="h-[320px] lg:h-auto lg:min-h-0 lg:flex-1"
             bodyClassName="min-h-0 flex-1"
           >
             <OrderBook snapshot={exchangeSnapshot} />
@@ -236,7 +248,7 @@ export default function TickerSimPage() {
         </div>
 
         {/* Right column · news (compose + tape) + order log */}
-        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-3">
+        <div className="flex flex-col gap-3 lg:col-span-3 lg:min-h-0">
           <Panel
             title="News"
             caption={undefined}
@@ -247,7 +259,7 @@ export default function TickerSimPage() {
               />
             }
             flush
-            className="min-h-0 flex-[1.4]"
+            className="h-[420px] lg:h-auto lg:min-h-0 lg:flex-[1.4]"
             bodyClassName="min-h-0 flex-1 flex flex-col"
           >
             {/* Compose row — flush so the panel border owns the outer edge. */}
@@ -274,7 +286,7 @@ export default function TickerSimPage() {
             caption="streaming"
             right={<Tag tone="neutral">{cohortStats.decisions}</Tag>}
             flush
-            className="min-h-0 flex-1"
+            className="h-[320px] lg:h-auto lg:min-h-0 lg:flex-1"
             bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
           >
             <OrderLog entries={orderLog} />

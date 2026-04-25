@@ -1,6 +1,6 @@
 import "./globals.css";
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 const geistSans = Geist({
@@ -17,6 +17,13 @@ export const metadata: Metadata = {
   title: "Animal Spirits - agent-based market simulator",
   description:
     "A finance-native multi-agent market simulator. Inject a headline, watch a population of trader personas react in real time, and see the price move before it moves.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#050505",
 };
 
 export default function RootLayout({
