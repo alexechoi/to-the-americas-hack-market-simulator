@@ -217,7 +217,7 @@ export default function TickerSimPage() {
             {exchangePricePoints.length >= 2 && exchangeOpenPrice !== null ? (
               <PriceChart
                 prices={exchangePricePoints}
-                news={[]}
+                news={headlines}
                 ticker={displayTicker}
                 openPrice={exchangeOpenPrice}
               />

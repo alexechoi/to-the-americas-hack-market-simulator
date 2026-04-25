@@ -2,9 +2,11 @@
 
 from .llm import (
     DEFAULT_MODEL,
+    DEFAULT_TEMPERATURE,
     TraderAgent,
     build_trader_agent,
     default_model,
+    default_temperature,
     fresh_window_s,
 )
 from .observation import build_news_view, build_trader_context
@@ -28,6 +30,7 @@ from .schemas import (
 
 __all__ = [
     "DEFAULT_MODEL",
+    "DEFAULT_TEMPERATURE",
     "AccountView",
     "LadderLevelView",
     "MarketContextView",
@@ -48,5 +51,6 @@ __all__ = [
     "build_trader_context",
     "default_model",
     "default_roster",
+    "default_temperature",
     "fresh_window_s",
 ]

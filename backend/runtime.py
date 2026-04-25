@@ -142,12 +142,30 @@ class ExchangeRuntime:
         ticker: str = "NVDA",
         ticker_name: str = "NVIDIA Corp",
     ) -> None:
-        # ``noise_bps=4`` adds a small Gaussian random walk to ``fair`` on every
-        # UI tick so the chart breathes during quiet periods without any agent
-        # flow. At 5 Hz UI cadence that's ≈ 4·√5 ≈ 9 bps/sec → ~0.7 %/min std,
-        # which is lively but not unrealistic. Tests still default to ``0``
-        # because they construct ``MMParams(...)`` explicitly.
-        self._params = params or MMParams(noise_bps=4.0)
+        # Tuned for "small, smooth moves" rather than the dataclass defaults,
+        # which were calibrated against tiny test orders and produce visible
+        # 4-5 % step jumps when the swarm fires 50-lot sweeps:
+        #
+        # * ``kyle_lambda=0.005`` (vs 0.05 default) — 10× smaller per-share
+        #   impact. A 50-lot top-of-book fill now moves fair ~0.42 % instead
+        #   of ~4 %.
+        # * ``level_size=60`` (vs 10) — typical 50-lot agent orders fill at
+        #   the inside instead of sweeping ~5 levels, which collapses the
+        #   sweep-amplification of impact.
+        # * ``vol=0.2`` (vs 0.5) — tightens the half-spread from ≈ 0.83 % to
+        #   ≈ 0.33 % at fair $60, so crossing the spread is a smaller jump.
+        # * ``noise_bps=6`` (vs 4) — a hair more background breathing so the
+        #   continuous random walk dominates the visual when no agent fires.
+        #   At 5 Hz UI cadence that's ≈ 6·√5 ≈ 13 bps/sec → ~1.0 %/min std.
+        #
+        # Tests still default to ``0`` / library defaults because they
+        # construct ``MMParams(...)`` explicitly.
+        self._params = params or MMParams(
+            vol=0.2,
+            kyle_lambda=0.005,
+            level_size=60,
+            noise_bps=6.0,
+        )
         self.exchange = Exchange(params=self._params, initial_fair=initial_fair)
         # News is part of the simulation, not a separate service — same ownership
         # boundary as the ladder. Agents and HTTP handlers read via `runtime.news_bus`.

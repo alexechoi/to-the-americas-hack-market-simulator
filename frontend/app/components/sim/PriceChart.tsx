@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { PricePoint } from "@/app/lib/exchange/types";
-import type { NewsHeadline } from "@/app/lib/sim/types";
+import type { NewsHeadline } from "@/app/lib/news/types";
 
 interface PriceChartProps {
   prices: PricePoint[];
@@ -15,6 +15,18 @@ interface PriceChartProps {
 }
 
 const PADDING = { top: 28, right: 56, bottom: 32, left: 0 };
+// Width of the transparent hit-target draped over each headline line. The chart
+// uses preserveAspectRatio="none" so this is in viewBox units, not screen px.
+const MARKER_HIT_W = 18;
+
+interface NewsMarker {
+  id: string;
+  x: number;
+  ts: number;
+  source: string;
+  headline: string;
+  injected: boolean;
+}
 
 export function PriceChart({
   prices,
@@ -27,20 +39,44 @@ export function PriceChart({
   const { path, realPath, areaPath, points, yTicks, xTicks, lastPoint, scale } =
     useMemo(() => buildChart(prices, width, height), [prices, width, height]);
 
-  const newsMarkers = useMemo(() => {
+  const newsMarkers = useMemo<NewsMarker[]>(() => {
     if (!points.length) return [];
     const tStart = points[0].t;
     const tEnd = points[points.length - 1].t;
     const span = Math.max(1, tEnd - tStart);
+    const innerW = width - PADDING.left - PADDING.right;
     return news
-      .filter((n) => n.ts >= tStart - 5000 && n.ts <= tEnd + 1000)
-      .map((n) => ({
-        ...n,
-        x:
-          PADDING.left +
-          ((n.ts - tStart) / span) * (width - PADDING.left - PADDING.right),
+      .map((n) => {
+        // Backend ships ts in unix seconds; PricePoint.t is wall-clock ms.
+        const tsMs = n.ts * 1000;
+        return { n, tsMs };
+      })
+      .filter(({ tsMs }) => tsMs >= tStart - 5000 && tsMs <= tEnd + 1000)
+      .map(({ n, tsMs }) => ({
+        id: n.headline_id,
+        ts: tsMs,
+        source: n.source,
+        headline: n.headline,
+        // The "user" source is what HeadlineInjector uses for manual injects;
+        // visually we still want to call those out vs backend-driven headlines.
+        injected: n.source === "user",
+        x: PADDING.left + ((tsMs - tStart) / span) * innerW,
       }));
   }, [news, points, width]);
+
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const hoveredMarker = useMemo(
+    () => (hoveredId ? newsMarkers.find((m) => m.id === hoveredId) : null),
+    [hoveredId, newsMarkers],
+  );
+
+  // 1 Hz wall-clock tick so the tooltip's "Xs ago" stays fresh without polling
+  // Date.now() during render. Mirrors the pattern in BackendNewsFeed.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const lastClose = lastPoint?.price ?? openPrice;
   const change = lastClose - openPrice;
@@ -130,31 +166,51 @@ export function PriceChart({
 
         {/* news markers */}
         <g clipPath="url(#chart-clip)">
-          {newsMarkers.map((n) => (
-            <g key={n.id}>
-              <line
-                x1={n.x}
-                x2={n.x}
-                y1={PADDING.top}
-                y2={height - PADDING.bottom}
-                stroke={
-                  n.injected
-                    ? "var(--color-accent)"
-                    : "color-mix(in oklab, var(--color-fg-muted) 50%, transparent)"
+          {newsMarkers.map((n) => {
+            const isHovered = n.id === hoveredId;
+            return (
+              <g
+                key={n.id}
+                onMouseEnter={() => setHoveredId(n.id)}
+                onMouseLeave={() =>
+                  setHoveredId((curr) => (curr === n.id ? null : curr))
                 }
-                strokeWidth={n.injected ? 1.4 : 1}
-                strokeDasharray={n.injected ? "0" : "3 3"}
-              />
-              <circle
-                cx={n.x}
-                cy={PADDING.top + 6}
-                r={3}
-                fill={
-                  n.injected ? "var(--color-accent)" : "var(--color-fg-muted)"
-                }
-              />
-            </g>
-          ))}
+                style={{ cursor: "pointer" }}
+              >
+                <line
+                  x1={n.x}
+                  x2={n.x}
+                  y1={PADDING.top}
+                  y2={height - PADDING.bottom}
+                  stroke={
+                    n.injected
+                      ? "var(--color-accent)"
+                      : "color-mix(in oklab, var(--color-fg-muted) 50%, transparent)"
+                  }
+                  strokeWidth={isHovered ? 2 : n.injected ? 1.4 : 1}
+                  strokeDasharray={n.injected ? "0" : "3 3"}
+                  opacity={isHovered ? 1 : 0.95}
+                />
+                <circle
+                  cx={n.x}
+                  cy={PADDING.top + 6}
+                  r={isHovered ? 4 : 3}
+                  fill={
+                    n.injected ? "var(--color-accent)" : "var(--color-fg-muted)"
+                  }
+                />
+                {/* Wider transparent hit-target so the line is easy to grab. */}
+                <rect
+                  x={n.x - MARKER_HIT_W / 2}
+                  y={PADDING.top}
+                  width={MARKER_HIT_W}
+                  height={height - PADDING.top - PADDING.bottom}
+                  fill="transparent"
+                  pointerEvents="all"
+                />
+              </g>
+            );
+          })}
         </g>
 
         {/* area under price (subtle, no gradient — solid color-mix tint) */}
@@ -217,6 +273,17 @@ export function PriceChart({
           </g>
         )}
       </svg>
+
+      {/* headline tooltip — anchored to the hovered marker. Uses a % of chart
+          extent so it tracks the SVG's stretched coordinate space. */}
+      {hoveredMarker && (
+        <NewsMarkerTooltip
+          marker={hoveredMarker}
+          chartW={width}
+          chartH={height}
+          now={now}
+        />
+      )}
 
       {/* corner overlay: ticker, last, change */}
       <div className="pointer-events-none absolute left-4 top-3 flex items-baseline gap-3">
@@ -358,4 +425,76 @@ function pad2(n: number) {
 function ticksFor(min: number, max: number, count: number): number[] {
   const step = (max - min) / count;
   return Array.from({ length: count }).map((_, i) => min + step * (i + 0.5));
+}
+
+interface NewsMarkerTooltipProps {
+  marker: NewsMarker;
+  chartW: number;
+  chartH: number;
+  now: number;
+}
+
+/** Headline tooltip — anchored just below the chart's top padding, centred on
+ *  the marker line by default and flipped to a left-/right-anchored layout
+ *  near the chart edges so the card stays inside the panel. */
+function NewsMarkerTooltip({
+  marker,
+  chartW,
+  chartH,
+  now,
+}: NewsMarkerTooltipProps) {
+  const xPct = (marker.x / chartW) * 100;
+  const yPct = ((PADDING.top + 14) / chartH) * 100;
+  // Edge-flip: keep the tooltip inside the chart's horizontal bounds. Tuned
+  // against an ~280px max-width and the typical panel size.
+  const anchor: "left" | "center" | "right" =
+    xPct < 18 ? "left" : xPct > 82 ? "right" : "center";
+  const transform =
+    anchor === "left"
+      ? "translateX(0)"
+      : anchor === "right"
+        ? "translateX(-100%)"
+        : "translateX(-50%)";
+  const tone = marker.injected
+    ? "var(--color-accent)"
+    : "var(--color-fg-muted)";
+  const ageMs = Math.max(0, now - marker.ts);
+  return (
+    <div
+      className="pointer-events-none absolute z-10 border border-[var(--color-line-strong)] bg-[var(--color-surface-2)] px-3 py-2 shadow-lg"
+      style={{
+        left: `${xPct}%`,
+        top: `${yPct}%`,
+        transform,
+        maxWidth: 280,
+        minWidth: 180,
+      }}
+    >
+      <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-fg-faint)]">
+        <span
+          aria-hidden
+          className="inline-block h-2 w-[2px]"
+          style={{ background: tone }}
+        />
+        <span className="truncate" style={{ color: tone }}>
+          {marker.injected ? "Injected" : marker.source || "headline"}
+        </span>
+        <span className="ml-auto tabular-nums">{formatAgeMs(ageMs)}</span>
+      </div>
+      <p className="mt-1.5 text-[12px] font-semibold leading-snug text-[var(--color-fg)]">
+        {marker.headline}
+      </p>
+    </div>
+  );
+}
+
+function formatAgeMs(ms: number): string {
+  if (ms < 1000) return "just now";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }

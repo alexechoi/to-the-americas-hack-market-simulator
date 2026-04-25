@@ -129,6 +129,29 @@ Examples:
 
 To switch models: set `LLM_MODEL` in `backend/.env`. **No code change.**
 
+### Sampling temperature
+
+Trader agents default to a **high** temperature (`DEFAULT_TEMPERATURE = 1.1`) so the
+swarm produces divergent decisions across personas — without that, every persona
+sees the same prompt and converges on the same trade, killing the order book.
+
+Override globally:
+
+```bash
+# backend/.env
+LLM_TEMPERATURE=1.3   # crank for more chaos
+LLM_TEMPERATURE=0.5   # tame for debugging / determinism (still won't be exact)
+```
+
+Override per-call (rare — e.g. a "calm contrarian" hero persona inside a hot swarm):
+
+```python
+agent = build_trader_agent(temperature=0.4)
+```
+
+Agents are cached per `(model, temperature)`, so per-call overrides cost one extra
+cached Agent — keep the set small.
+
 ## 4a. Memory is centralised — use `agents.memory.memory`
 
 Trader agents are otherwise stateless (no `message_history` between turns).

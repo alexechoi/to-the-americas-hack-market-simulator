@@ -23,6 +23,7 @@ import os
 from functools import lru_cache
 
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.settings import ModelSettings
 
 from .schemas import (
     NewsView,
@@ -37,6 +38,16 @@ logger = logging.getLogger(__name__)
 TraderAgent = Agent[TraderContext, TraderDecision]
 
 DEFAULT_MODEL = "gateway/groq:llama-3.3-70b-versatile"
+
+# High default temperature — we WANT variety across the swarm. Different
+# personas seeing the same prompt should plausibly disagree on action,
+# size, and limit_price; without that, all 100 agents collapse onto the
+# same trade and the order book stops being interesting. 1.0 is the
+# usual "creative" setting; we go a hair higher to push divergence
+# further while staying inside the range where Llama 3.3 70B reliably
+# produces a schema-valid TraderDecision. Override per-deployment via
+# the LLM_TEMPERATURE env var.
+DEFAULT_TEMPERATURE = 1.1
 
 
 def _ensure_gateway_model(model: str) -> str:
@@ -65,6 +76,28 @@ def default_model() -> str:
     return _ensure_gateway_model(os.getenv("LLM_MODEL", DEFAULT_MODEL))
 
 
+def default_temperature() -> float:
+    """Return the sampling temperature for new agents. Override via ``LLM_TEMPERATURE``.
+
+    We default high (``DEFAULT_TEMPERATURE``) to maximise divergence across the
+    swarm — different personas reading the same prompt should plausibly
+    disagree on action, size, and limit_price. Falls back to the default if
+    the env var is missing, empty, or unparseable.
+    """
+    raw = os.getenv("LLM_TEMPERATURE", "").strip()
+    if not raw:
+        return DEFAULT_TEMPERATURE
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid LLM_TEMPERATURE=%r; falling back to %.2f",
+            raw,
+            DEFAULT_TEMPERATURE,
+        )
+        return DEFAULT_TEMPERATURE
+
+
 _BASE_INSTRUCTIONS = (
     "You are a trader operating in a simulated single-asset market. "
     "Each turn you receive THREE inputs, in priority order:\n"
@@ -91,9 +124,10 @@ _BASE_INSTRUCTIONS = (
     "nothing changed since last tick — re-read the news.\n\n"
     "Emit a TraderDecision with EXACTLY these fields:\n"
     "  - action: 'buy', 'sell', or 'hold' — pick exactly one.\n"
-    "  - quantity: 0 if action is 'hold'; otherwise a positive integer near 50 lots "
-    "(this is the standard size every agent in this market uses). Stay close to ~50 "
-    "across turns; never exceed your max_order_size.\n"
+    "  - quantity: 0 if action is 'hold'; otherwise a positive integer typically "
+    "around 10-20 lots (small, frequent prints — the market moves smoothly when "
+    "everyone trades small). Only size up beyond ~30 on a strong [NEW] headline "
+    "with high conviction, and never exceed your max_order_size.\n"
     "  - limit_price: a positive number set so the order is marketable and crosses "
     "the spread immediately:\n"
     "      * If action is 'buy', set limit_price = market.best_ask (lift the offer).\n"
@@ -286,14 +320,22 @@ def _runtime_block(ctx: TraderContext) -> str:
 
 
 @lru_cache(maxsize=8)
-def _trader_agent_for_model(model: str) -> TraderAgent:
-    """One shared Agent per model — persona is injected via deps at run time."""
-    logger.info("Constructing trader Agent for model=%s", model)
+def _trader_agent_for_model(model: str, temperature: float) -> TraderAgent:
+    """One shared Agent per (model, temperature) — persona is injected via deps at run time.
+
+    Temperature is folded into the cache key so a hero persona running on a
+    different temperature gets its own Agent instance and doesn't mutate the
+    shared swarm Agent's settings.
+    """
+    logger.info(
+        "Constructing trader Agent for model=%s temperature=%.2f", model, temperature
+    )
     agent: TraderAgent = Agent(
         model,
         deps_type=TraderContext,
         output_type=TraderDecision,
         instructions=_BASE_INSTRUCTIONS,
+        model_settings=ModelSettings(temperature=temperature),
     )
 
     @agent.instructions
@@ -307,13 +349,24 @@ def _trader_agent_for_model(model: str) -> TraderAgent:
     return agent
 
 
-def build_trader_agent(*, model: str | None = None) -> TraderAgent:
+def build_trader_agent(
+    *,
+    model: str | None = None,
+    temperature: float | None = None,
+) -> TraderAgent:
     """Return a pydantic-ai Agent ready to call `.run("...", deps=trader_context)`.
 
-    The Agent itself is cached per model string (Agents are stateless); the persona
-    is supplied via `TraderContext.persona` on each `.run` call.
+    The Agent itself is cached per (model, temperature) (Agents are stateless);
+    the persona is supplied via `TraderContext.persona` on each `.run` call.
 
     Pass `model="gateway/anthropic:claude-sonnet-4-6"` (or any other pydantic-ai-supported
     gateway model string) to override the default for hero personas.
+
+    Pass `temperature=0.4` for a more deterministic/contrarian persona inside
+    a high-temperature swarm. Defaults to `default_temperature()` (env-driven,
+    high — see `DEFAULT_TEMPERATURE`).
     """
-    return _trader_agent_for_model(_ensure_gateway_model(model or default_model()))
+    return _trader_agent_for_model(
+        _ensure_gateway_model(model or default_model()),
+        temperature if temperature is not None else default_temperature(),
+    )
