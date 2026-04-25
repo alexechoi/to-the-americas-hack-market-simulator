@@ -167,7 +167,6 @@ export default function SimPage() {
         <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5">
           <Panel
             title="Price action"
-            caption={`${exchangePricePoints.length} ticks · fair`}
             right={
               <div className="flex items-center gap-2">
                 <Tag tone="neutral">Kyle λ · depth-weighted</Tag>
@@ -196,11 +195,7 @@ export default function SimPage() {
 
           <Panel
             title="Order book"
-            caption={
-              exchangeSnapshot
-                ? `fair ${exchangeSnapshot.fair.toFixed(2)} · tick ${exchangeSnapshot.tick_id}`
-                : "connecting…"
-            }
+            caption={exchangeSnapshot ? undefined : "connecting…"}
             right={
               <LiveDot
                 tone={exchangeConnected ? "live" : "paused"}

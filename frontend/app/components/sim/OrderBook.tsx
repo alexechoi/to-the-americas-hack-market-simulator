@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/app/components/ui/Button";
 import { submitOrder } from "@/app/lib/exchange/api";
@@ -57,7 +57,7 @@ interface AnnotatedLevel extends LadderLevel {
 const GRID_COLS = "grid-cols-[64px_1fr_1fr_1fr]";
 
 function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
-  const { ladder, best_bid, best_ask, recent_trades } = snapshot;
+  const { ladder, recent_trades } = snapshot;
   const last =
     recent_trades.length > 0
       ? recent_trades[recent_trades.length - 1].vwap
@@ -109,7 +109,6 @@ function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
     return m;
   }, [asksAnnotated, bidsAnnotated]);
 
-  const spread = best_ask - best_bid;
   const bestAskIdx = asksAnnotated.length - 1;
 
   return (
@@ -141,12 +140,6 @@ function Ladder({ snapshot }: { snapshot: ExchangeSnapshot }) {
             Last:{" "}
             <span className="text-[var(--color-fg-muted)]">
               {last !== null ? last.toFixed(2) : "—"}
-            </span>
-          </span>
-          <span className="ml-auto">
-            Spread:{" "}
-            <span className="text-[var(--color-fg-muted)]">
-              {spread.toFixed(2)}
             </span>
           </span>
         </div>
@@ -280,8 +273,14 @@ function SubmitFOK({
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  // Auto-suggest a sensible limit when the side changes (or first render).
-  const suggested = side === "buy" ? bestAsk : bestBid;
+  // Keep refs to the latest best prices so async handlers can read them
+  // *after* the order round-trip, when the snapshot may already have moved.
+  const bestBidRef = useRef(bestBid);
+  const bestAskRef = useRef(bestAsk);
+  useEffect(() => {
+    bestBidRef.current = bestBid;
+    bestAskRef.current = bestAsk;
+  }, [bestBid, bestAsk]);
 
   const setSideAndLimit = (next: Side) => {
     setSide(next);
@@ -305,9 +304,10 @@ function SubmitFOK({
         );
       } else if (result.status === "killed") {
         setStatus(`killed: ${humanizeReason(result.reason)}`);
-      } else {
-        setStatus("hold");
       }
+      // Refill the limit with the latest best price so the user can fire
+      // off another click without re-typing.
+      setLimit(side === "buy" ? bestAskRef.current : bestBidRef.current);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "submit failed");
     } finally {
@@ -346,9 +346,7 @@ function SubmitFOK({
           className={inputClass}
         />
       </Field>
-      <Field
-        label={`Limit (best ${side === "buy" ? "ask" : "bid"} ${suggested.toFixed(2)})`}
-      >
+      <Field label="Limit">
         <input
           type="number"
           step={0.01}
