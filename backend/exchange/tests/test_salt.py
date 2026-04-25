@@ -25,7 +25,9 @@ def test_different_seeds_differ():
 
 def test_imbalance_asymmetry_fires():
     """Across many ticks, total bid depth != total ask depth on at least some ticks."""
-    p = MMParams(imbalance=0.5, salt_seed=7, size_jitter=0.0, gap_prob=0.0, jumbo_prob=0.0)
+    p = MMParams(
+        imbalance=0.5, salt_seed=7, size_jitter=0.0, gap_prob=0.0, jumbo_prob=0.0
+    )
     deltas = []
     for t in range(100):
         lad = build_ladder(100.0, t, p)
@@ -59,7 +61,7 @@ def test_jumbo_frequency_in_tolerance():
             if size >= p.level_size * p.jumbo_mult * 0.99:
                 n_jumbos += 1
     rate = n_jumbos / n_levels
-    assert 0.07 < rate < 0.13   # ±3 percentage points of 0.1
+    assert 0.07 < rate < 0.13  # ±3 percentage points of 0.1
 
 
 def test_gap_frequency_in_tolerance():

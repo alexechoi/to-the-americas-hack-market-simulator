@@ -46,12 +46,20 @@ def test_sweep_moves_fair_strictly_more_than_top_of_book(flat_params: MMParams):
     """
     qty = 30
     p_top = MMParams(
-        size_jitter=0.0, imbalance=0.0, gap_prob=0.0, jumbo_prob=0.0,
-        level_size=qty, ladder_depth=10,
+        size_jitter=0.0,
+        imbalance=0.0,
+        gap_prob=0.0,
+        jumbo_prob=0.0,
+        level_size=qty,
+        ladder_depth=10,
     )
     p_sweep = MMParams(
-        size_jitter=0.0, imbalance=0.0, gap_prob=0.0, jumbo_prob=0.0,
-        level_size=qty // 6, ladder_depth=10,
+        size_jitter=0.0,
+        imbalance=0.0,
+        gap_prob=0.0,
+        jumbo_prob=0.0,
+        level_size=qty // 6,
+        ladder_depth=10,
     )
     a = Exchange(params=p_top, initial_fair=100.0)
     b = Exchange(params=p_sweep, initial_fair=100.0)
