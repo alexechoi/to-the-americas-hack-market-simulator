@@ -182,3 +182,29 @@ def test_persona_block_still_renders_persona_metadata():
     assert "Tester" in block
     assert "retail" in block
     assert "Max order size: 50" in block
+
+
+def test_runtime_block_renders_memory_above_news():
+    """When MuBit returns a recall block, it must appear before news so the
+    LLM treats prior lessons as a frame for interpreting the latest headlines.
+    The label and the recalled text must both be present."""
+    block = _runtime_block(
+        _ctx(memory="LESSON: bullish earnings headlines historically lift fair ~1%.")
+    )
+    assert "Memory (lessons + recent activity)" in block
+    assert "LESSON: bullish earnings headlines" in block
+    mem_idx = block.index("Memory (lessons")
+    news_idx = block.index("Recent News")
+    assert mem_idx < news_idx, (
+        f"Memory must render before news; got memory at {mem_idx}, news at {news_idx}"
+    )
+
+
+def test_runtime_block_omits_memory_section_when_empty():
+    """Empty memory must NOT render an empty section header — every prompt
+    token costs latency and money. Memory is opt-in based on recall result."""
+    block = _runtime_block(_ctx(memory=""))
+    assert "Memory (lessons" not in block
+
+    block_ws = _runtime_block(_ctx(memory="   \n  "))
+    assert "Memory (lessons" not in block_ws

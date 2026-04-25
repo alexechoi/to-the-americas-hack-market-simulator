@@ -237,9 +237,7 @@ class AgentSwarmRuntime:
             # Persist the decision to memory BEFORE broadcasting/submitting so
             # a slow MuBit call can't block the order path. Fire-and-forget —
             # the call returns immediately and runs in the background.
-            memory.remember_decision_async(
-                persona=persona, decision=decision, ctx=ctx
-            )
+            memory.remember_decision_async(persona=persona, decision=decision, ctx=ctx)
             # Broadcast every decision (including HOLDs) to the order-log SSE
             # stream. This is the single source of truth for the UI panel —
             # killed orders are also represented here as their original decision.

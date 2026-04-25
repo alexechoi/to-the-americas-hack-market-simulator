@@ -117,6 +117,7 @@ def fresh_window_s(persona: TraderPersona) -> float:
     """
     return persona.tick_period_s * _FRESH_TICK_MULTIPLIER
 
+
 _ARCHETYPE_NUDGES: dict[TraderArchetype, str] = {
     TraderArchetype.HFT: (
         "You react in microseconds to micro-structure: ladder imbalance, recent prints, "
