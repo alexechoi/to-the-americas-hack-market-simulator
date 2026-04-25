@@ -9,6 +9,7 @@ dependencies = [
     "firebase-admin>=6.6.0",
     "python-dotenv>=1.0.0",
     "ruff>=0.14.10",
+    "sse-starlette>=3.3.4",
     "uvicorn>=0.38.0",
 ]
 

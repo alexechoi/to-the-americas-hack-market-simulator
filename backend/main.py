@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
 import uvicorn
 from dotenv import load_dotenv
@@ -7,8 +8,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from auth import FirebaseUser, OptionalFirebaseUser
+from exchange_api import router as exchange_router
 from firebase_service import auto_initialize
 from notifications import router as notifications_router
+from runtime import runtime as exchange_runtime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,10 +25,22 @@ logging.basicConfig(
 # Initialize Firebase on startup
 auto_initialize()
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start/stop the exchange tick loop alongside the app."""
+    exchange_runtime.start()
+    try:
+        yield
+    finally:
+        await exchange_runtime.stop()
+
+
 app = FastAPI(
     title="Backend API",
     description="Backend API with Firebase authentication",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS configuration
@@ -44,6 +59,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(notifications_router)
+app.include_router(exchange_router)
 
 
 # ============================================================================

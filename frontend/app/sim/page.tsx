@@ -6,13 +6,14 @@ import { useMemo, useState } from "react";
 import { AgentReasoning } from "@/app/components/sim/AgentReasoning";
 import { AgentSwarm } from "@/app/components/sim/AgentSwarm";
 import { HeadlineInjector } from "@/app/components/sim/HeadlineInjector";
-import { OrderTape } from "@/app/components/sim/OrderTape";
+import { OrderBook } from "@/app/components/sim/OrderBook";
 import { PriceChart } from "@/app/components/sim/PriceChart";
 import { Button } from "@/app/components/ui/Button";
 import { LiveDot } from "@/app/components/ui/LiveDot";
 import { Logo } from "@/app/components/ui/Logo";
 import { Panel } from "@/app/components/ui/Panel";
 import { Tag } from "@/app/components/ui/Tag";
+import { useExchange } from "@/app/lib/exchange/useExchange";
 import { useSimulation } from "@/app/lib/sim/useSimulation";
 
 export default function SimPage() {
@@ -22,6 +23,8 @@ export default function SimPage() {
     startPrice: 142.18,
     tickMs: 280,
   });
+  const { snapshot: exchangeSnapshot, connected: exchangeConnected } =
+    useExchange();
 
   const change = snapshot ? snapshot.price - snapshot.openPrice : 0;
   const changePct = snapshot ? (change / snapshot.openPrice) * 100 : 0;
@@ -168,13 +171,23 @@ export default function SimPage() {
           </Panel>
 
           <Panel
-            title="Order tape"
-            caption="last 14 fills"
+            title="Order book"
+            caption={
+              exchangeSnapshot
+                ? `fair ${exchangeSnapshot.fair.toFixed(2)} · tick ${exchangeSnapshot.tick_id}`
+                : "connecting…"
+            }
+            right={
+              <LiveDot
+                tone={exchangeConnected ? "live" : "paused"}
+                label={exchangeConnected ? "Live" : "Connecting"}
+              />
+            }
             flush
             className="min-h-0 flex-1"
-            bodyClassName="min-h-0 flex-1 overflow-y-auto no-scrollbar"
+            bodyClassName="min-h-0 flex-1"
           >
-            <OrderTape decisions={snapshot?.decisions ?? []} />
+            <OrderBook snapshot={exchangeSnapshot} />
           </Panel>
         </div>
 
