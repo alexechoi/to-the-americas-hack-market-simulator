@@ -7,7 +7,7 @@
 
 import { auth } from "./firebase/config";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend-8o1j.onrender.com";
 
 /**
  * Get the current user's Firebase ID token.
