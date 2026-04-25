@@ -32,18 +32,6 @@ export function Header() {
             >
               How it works
             </Link>
-            <Link
-              href="/#research"
-              className="transition-colors hover:text-[var(--color-fg)]"
-            >
-              Research
-            </Link>
-            <Link
-              href="/#api"
-              className="transition-colors hover:text-[var(--color-fg)]"
-            >
-              API
-            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">
