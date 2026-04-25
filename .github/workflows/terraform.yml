@@ -1,0 +1,146 @@
+name: Terraform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+
+env:
+  TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+  TF_VAR_region: ${{ vars.GCP_REGION }}
+  TF_VAR_billing_account: ${{ vars.GCP_BILLING_ACCOUNT }}
+  TF_VAR_github_repo: ${{ github.repository }}
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  check-config:
+    name: Check Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Check required configuration
+        id: check
+        run: |
+          if [[ -z "${{ vars.GCP_PROJECT_ID }}" ]] || \
+             [[ -z "${{ vars.GCP_REGION }}" ]] || \
+             [[ -z "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ]] || \
+             [[ -z "${{ secrets.GCP_SERVICE_ACCOUNT }}" ]]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::warning::Skipping Terraform - missing required GitHub variables/secrets. See infra/README.md for setup instructions."
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    needs: check-config
+    if: needs.check-config.outputs.configured == 'true'
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+        continue-on-error: true
+
+      - name: Comment PR with Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PLAN: ${{ steps.plan.outputs.stdout }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+
+            <details><summary>Show Plan</summary>
+
+            \`\`\`terraform
+            ${process.env.PLAN}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve tfplan
+
+  skip-notification:
+    name: Configuration Missing
+    runs-on: ubuntu-latest
+    needs: check-config
+    if: needs.check-config.outputs.configured == 'false'
+    steps:
+      - name: Skip notification
+        run: |
+          echo "::notice::Terraform workflow skipped - GCP not configured."
+          echo ""
+          echo "To enable Terraform CI/CD, configure the following in GitHub Settings:"
+          echo ""
+          echo "Variables (Settings > Secrets and variables > Actions > Variables):"
+          echo "  - GCP_PROJECT_ID"
+          echo "  - GCP_REGION"
+          echo "  - GCP_BILLING_ACCOUNT"
+          echo ""
+          echo "Secrets (Settings > Secrets and variables > Actions > Secrets):"
+          echo "  - GCP_WORKLOAD_IDENTITY_PROVIDER"
+          echo "  - GCP_SERVICE_ACCOUNT"
+          echo ""
+          echo "See infra/README.md for detailed setup instructions."

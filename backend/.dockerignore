@@ -1,0 +1,48 @@
+# Virtual environment
+.venv
+venv
+env
+
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+*.pyo
+
+# Development files
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Tests
+tests
+*_test.py
+test_*.py
+pytest.ini
+.pytest_cache
+coverage
+
+# Ruff cache
+.ruff_cache
+
+# Type stubs
+*.pyi
+

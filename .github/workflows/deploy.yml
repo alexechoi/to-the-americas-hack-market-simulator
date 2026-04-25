@@ -1,0 +1,184 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: "Deploy backend"
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: "Deploy frontend"
+        type: boolean
+        default: true
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  DOCKER_REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/docker
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  check-config:
+    name: Check Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Check required configuration
+        id: check
+        run: |
+          if [[ -z "${{ vars.GCP_PROJECT_ID }}" ]] || \
+             [[ -z "${{ vars.GCP_REGION }}" ]] || \
+             [[ -z "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ]] || \
+             [[ -z "${{ secrets.GCP_SERVICE_ACCOUNT }}" ]]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::warning::Skipping deployment - missing required GitHub variables/secrets. See infra/README.md for setup instructions."
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    needs: check-config
+    if: needs.check-config.outputs.configured == 'true'
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    needs: [check-config, changes]
+    if: |
+      needs.check-config.outputs.configured == 'true' &&
+      (needs.changes.outputs.backend == 'true' ||
+       (github.event_name == 'workflow_dispatch' && inputs.deploy_backend))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/backend:latest
+            ${{ env.DOCKER_REGISTRY }}/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: backend
+          region: ${{ env.GCP_REGION }}
+          image: ${{ env.DOCKER_REGISTRY }}/backend:${{ github.sha }}
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: [check-config, changes]
+    if: |
+      needs.check-config.outputs.configured == 'true' &&
+      (needs.changes.outputs.frontend == 'true' ||
+       (github.event_name == 'workflow_dispatch' && inputs.deploy_frontend))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/frontend:latest
+            ${{ env.DOCKER_REGISTRY }}/frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: frontend
+          region: ${{ env.GCP_REGION }}
+          image: ${{ env.DOCKER_REGISTRY }}/frontend:${{ github.sha }}
+
+  skip-notification:
+    name: Configuration Missing
+    runs-on: ubuntu-latest
+    needs: check-config
+    if: needs.check-config.outputs.configured == 'false'
+    steps:
+      - name: Skip notification
+        run: |
+          echo "::notice::Deploy workflow skipped - GCP not configured."
+          echo ""
+          echo "To enable deployment CI/CD, configure the following in GitHub Settings:"
+          echo ""
+          echo "Variables (Settings > Secrets and variables > Actions > Variables):"
+          echo "  - GCP_PROJECT_ID"
+          echo "  - GCP_REGION"
+          echo ""
+          echo "Secrets (Settings > Secrets and variables > Actions > Secrets):"
+          echo "  - GCP_WORKLOAD_IDENTITY_PROVIDER"
+          echo "  - GCP_SERVICE_ACCOUNT"
+          echo ""
+          echo "See infra/README.md for detailed setup instructions."

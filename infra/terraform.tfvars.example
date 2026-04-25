@@ -1,0 +1,92 @@
+# Example Terraform Variables
+# Copy this file to terraform.tfvars and fill in your values
+
+# Required: GCP Project Configuration
+project_id      = "your-project-id"
+project_name    = "Your Project Name"
+region          = "us-central1"
+billing_account = "XXXXXX-XXXXXX-XXXXXX"
+
+# Required: GitHub Repository (for Workload Identity Federation)
+github_repo = "your-org/your-repo"
+
+# Optional: GitHub Token for automatic CI/CD setup
+# If provided, Terraform will automatically set the GitHub Actions variables/secrets
+# needed for the deploy workflow. Requires 'repo' scope.
+# Get a token from: https://github.com/settings/tokens
+# Leave empty to skip (you'll need to set GCP_PROJECT_ID, GCP_REGION, 
+# GCP_WORKLOAD_IDENTITY_PROVIDER, and GCP_SERVICE_ACCOUNT manually)
+github_token = ""
+
+# =============================================================================
+# Firebase Auth - Google Sign-In (Optional)
+# =============================================================================
+# To enable Google Sign-In via Terraform, create OAuth credentials:
+#   1. Go to Google Cloud Console > APIs & Services > Credentials
+#   2. Create an OAuth 2.0 Client ID (Web application type)
+#   3. Add authorized redirect URI: https://<project-id>.firebaseapp.com/__/auth/handler
+#   4. Set the client ID and secret below
+#
+# Alternatively, leave these empty and configure Google Sign-In
+# directly in the Firebase Console after running terraform apply.
+oauth_client_id     = ""
+oauth_client_secret = ""
+
+# =============================================================================
+# Firebase Auth - Apple Sign-In (Optional)
+# =============================================================================
+# To enable Apple Sign-In, you need credentials from Apple Developer Console.
+# 
+# Setup steps:
+# 1. Go to https://developer.apple.com/account
+# 2. Create an App ID with "Sign In with Apple" capability
+# 3. Create a Services ID (this is your client_id for web auth)
+#    - Enable "Sign In with Apple"
+#    - Configure domains and return URLs
+# 4. Create a Key with "Sign In with Apple" enabled
+#    - Download the .p8 file (you can only download once!)
+#    - Note the Key ID
+# 5. Find your Team ID in Membership section
+
+apple_team_id     = ""           # Your 10-character Team ID
+apple_services_id = ""           # Services ID (e.g., com.yourcompany.app.signin)
+apple_key_id      = ""           # Key ID from the key you created
+apple_private_key = ""           # Contents of the .p8 file
+apple_bundle_id   = ""           # iOS app bundle ID (e.g., com.yourcompany.app)
+
+# Optional: Expo Mobile App Configuration
+# These create Firebase iOS and Android apps for the Expo app
+# Use reverse domain notation (e.g., com.yourcompany.expoapp)
+expo_ios_bundle_id        = ""
+expo_android_package_name = ""
+
+# Optional: Web Push Notifications
+# Get VAPID key from Firebase Console: Project Settings > Cloud Messaging > Web Push certificates
+fcm_vapid_key = ""
+
+# =============================================================================
+# Frontend Deployment Platform
+# =============================================================================
+# Choose where to deploy the frontend. Options:
+#   - "cloudrun" (default): Deploy to Google Cloud Run
+#   - "vercel": Deploy to Vercel
+#   - "netlify": Deploy to Netlify
+#
+# The backend always runs on Cloud Run. Only the frontend can be deployed elsewhere.
+frontend_platform = "cloudrun"
+
+# Vercel Configuration (required if frontend_platform = "vercel")
+# Get API token from: https://vercel.com/account/tokens
+# Find org/team ID in Vercel dashboard settings
+# Replace API token below
+vercel_api_token = "000000000000000000000000"
+vercel_org_id    = ""
+
+# Netlify Configuration (required if frontend_platform = "netlify")
+# 1. Create the site manually in the Netlify UI (https://app.netlify.com)
+# 2. Get your token from: https://app.netlify.com/user/applications#personal-access-tokens
+# 3. Find Site ID in: Site Settings > General > Site ID
+# 4. Team slug is from your Netlify URL: app.netlify.com/teams/YOUR-TEAM-SLUG
+netlify_token     = ""
+netlify_site_id   = ""
+netlify_team_slug = ""
