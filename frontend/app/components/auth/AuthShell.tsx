@@ -26,7 +26,7 @@ export function AuthShell({
 }: AuthShellProps) {
   return (
     <div className="relative isolate flex min-h-screen flex-col overflow-hidden bg-[var(--color-bg)] text-[var(--color-fg)]">
-      <WarpBackground intensity={0.6} speed={0.45} />
+      <WarpBackground intensity={0.6} speed={1.4} />
 
       <header className="relative z-10 flex items-center justify-between px-6 py-5 md:px-10">
         <Link

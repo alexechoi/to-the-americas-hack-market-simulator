@@ -17,7 +17,7 @@ const STAT_ROW = [
 export function Hero() {
   return (
     <section className="relative isolate overflow-hidden">
-      <WarpBackground intensity={0.62} speed={0.4} />
+      <WarpBackground intensity={0.62} speed={1.6} />
 
       <div className="relative z-10 mx-auto flex min-h-[92vh] max-w-[1440px] flex-col px-6 pb-24 pt-16 md:px-10">
         {/* eyebrow */}

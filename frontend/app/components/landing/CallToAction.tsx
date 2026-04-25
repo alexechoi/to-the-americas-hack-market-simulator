@@ -8,7 +8,7 @@ import { WarpBackground } from "../ui/WarpBackground";
 export function CallToAction() {
   return (
     <section className="relative isolate overflow-hidden border-y border-[var(--color-line)]">
-      <WarpBackground intensity={0.7} speed={0.5} grid={false} />
+      <WarpBackground intensity={0.7} speed={2} grid={false} />
 
       <div className="relative z-10 mx-auto max-w-[1440px] px-6 py-32 md:px-10">
         <motion.p

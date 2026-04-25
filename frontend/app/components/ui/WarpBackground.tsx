@@ -21,7 +21,7 @@ interface WarpBackgroundProps {
  */
 export function WarpBackground({
   intensity = 0.55,
-  speed = 0.55,
+  speed = 1.6,
   grid = true,
   className,
 }: WarpBackgroundProps) {
