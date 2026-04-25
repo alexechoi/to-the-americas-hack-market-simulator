@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
@@ -7,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # .env must load before observability so LOGFIRE_TOKEN / ENVIRONMENT are visible.
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 from auth import FirebaseUser, OptionalFirebaseUser  # noqa: E402
 from debug_api import router as debug_router  # noqa: E402

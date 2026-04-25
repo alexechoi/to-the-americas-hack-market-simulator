@@ -1,11 +1,11 @@
-"""Centralised LLM inference utility.
+"""Centralised LLM inference utility (gateway-only).
 
 Single source of truth for picking a model and constructing a trader-shaped
 `pydantic_ai.Agent`. **All agent code in the repo must go through `build_trader_agent`
 and `default_model` — never instantiate `Agent` or a `*Model` class directly.**
 
 Why this exists:
-    * One place to swap providers (Groq ↔ Anthropic ↔ OpenAI ↔ Vercel AI Gateway).
+    * One place to swap models/providers via the PydanticAI gateway.
     * Agents are stateless — caching one `Agent` per model string keeps Pydantic-AI's
       schema warm-up out of every trader turn (matters when ~100 personas tick fast).
     * Persona personality is injected via dynamic `@agent.instructions` from
@@ -13,9 +13,7 @@ Why this exists:
     * Logfire instrumentation is wired globally in `observability.configure_observability`
       — every `agent.run(...)` is traced automatically (messages, tools, latency, tokens).
 
-Default model: Groq's Llama 3.3 70B Versatile. Picked for the swarm use case where
-~100 agents tick in parallel and per-call latency must stay sub-second; Groq's LPU
-backend keeps short structured `TraderDecision` outputs well under 300ms.
+Default model: Gateway-backed Groq Llama 3.3 70B (fast + cheap).
 """
 
 from __future__ import annotations
@@ -35,6 +33,20 @@ TraderAgent = Agent[TraderContext, TraderDecision]
 DEFAULT_MODEL = "gateway/groq:llama-3.3-70b-versatile"
 
 
+def _ensure_gateway_model(model: str) -> str:
+    """Force all model strings through the gateway.
+
+    We intentionally do not support direct provider models like `groq:...`; local dev
+    should behave like prod where the gateway key is the single required credential.
+    """
+    m = (model or "").strip()
+    if not m:
+        return DEFAULT_MODEL
+    if m.startswith("gateway/"):
+        return m
+    return f"gateway/{m}"
+
+
 def default_model() -> str:
     """Return the model identifier for new agents. Override via `LLM_MODEL` env var.
 
@@ -44,7 +56,7 @@ def default_model() -> str:
         * `gateway/anthropic:claude-sonnet-4-6`   (slow + smart, for hero personas)
         * `gateway/openai:gpt-5.2`                (fallback)
     """
-    return os.getenv("LLM_MODEL", DEFAULT_MODEL).strip()
+    return _ensure_gateway_model(os.getenv("LLM_MODEL", DEFAULT_MODEL))
 
 
 _BASE_INSTRUCTIONS = (
@@ -132,4 +144,4 @@ def build_trader_agent(*, model: str | None = None) -> TraderAgent:
     Pass `model="gateway/anthropic:claude-sonnet-4-6"` (or any other pydantic-ai-supported
     gateway model string) to override the default for hero personas.
     """
-    return _trader_agent_for_model(model or default_model())
+    return _trader_agent_for_model(_ensure_gateway_model(model or default_model()))

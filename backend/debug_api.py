@@ -7,7 +7,7 @@ Routes:
                               is wired and behaving (positive case + the negative case where
                               `quantity != 0` for HOLD must raise).
     POST /debug/inference  — runs ONE real `pydantic-ai` Agent turn against the configured
-                              `LLM_MODEL` (default `groq:llama-3.3-70b-versatile`) and returns
+                              `LLM_MODEL` (gateway-only; default `gateway/groq:llama-3.3-70b-versatile`) and returns
                               the validated `TraderDecision`. Pulls live market state from the
                               shared exchange runtime so the model sees a realistic context.
 
@@ -42,6 +42,7 @@ from agents import (
     build_trader_agent,
     default_model,
 )
+from agents.llm import _ensure_gateway_model
 from runtime import runtime
 
 logger = logging.getLogger(__name__)
@@ -62,12 +63,7 @@ def ping() -> dict[str, Any]:
         "service": "market-sim-backend",
         "environment": os.getenv("ENVIRONMENT", "dev"),
         "llm_model": default_model(),
-        "providers": {
-            "groq": bool(os.getenv("GROQ_API_KEY")),
-            "anthropic": bool(os.getenv("ANTHROPIC_API_KEY")),
-            "openai": bool(os.getenv("OPENAI_API_KEY")),
-            "google": bool(os.getenv("GEMINI_API_KEY")),
-        },
+        "pydantic_ai_gateway_key_present": bool(os.getenv("PYDANTIC_AI_GATEWAY_API_KEY")),
         "logfire_token_present": bool(os.getenv("LOGFIRE_TOKEN")),
     }
 
@@ -165,7 +161,7 @@ class InferenceRequest(BaseModel):
 async def debug_inference(req: InferenceRequest | None = None) -> dict[str, Any]:
     """Run one real Agent turn and return the validated TraderDecision."""
     request = req or InferenceRequest()
-    model = request.model or default_model()
+    model = _ensure_gateway_model(request.model or default_model())
 
     persona = _sample_persona().model_copy(update={"archetype": request.archetype})
     headline = NewsHeadline(source="debug", headline=request.headline)
@@ -219,15 +215,12 @@ async def debug_inference(req: InferenceRequest | None = None) -> dict[str, Any]
 def _inference_hint(model: str, exc: Exception) -> str:
     """Human-friendly suggestion based on the model string + error message."""
     msg = str(exc).lower()
+    if model.startswith("gateway/"):
+        if "api_key" in msg or "api key" in msg or "gateway" in msg or "unauthorized" in msg:
+            return "Set PYDANTIC_AI_GATEWAY_API_KEY in backend/.env (gateway model string)."
+        return "Gateway model string detected (prefix gateway/). Check PYDANTIC_AI_GATEWAY_API_KEY and backend logs."
+
     provider = model.split(":", 1)[0] if ":" in model else model
-    env_var = {
-        "groq": "GROQ_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "google-gla": "GEMINI_API_KEY",
-    }.get(provider)
-    if env_var and ("api_key" in msg or "api key" in msg or env_var.lower() in msg):
-        return f"Set {env_var} in backend/.env (provider={provider})."
     if "model" in msg and "not found" in msg:
         return f"Model id '{model}' is unknown to provider '{provider}'."
-    return "Check backend logs / Logfire for the full traceback."
+    return "Non-gateway model string detected. Use a gateway/... model string and check backend logs."
