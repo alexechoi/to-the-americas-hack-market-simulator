@@ -1,26 +1,134 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Animal Spirits — design tokens
+ *
+ * Surfaces are layered, not gradient. Typography is the hierarchy.
+ * Accent is a single electric lime, used sparingly. Strict palette: zinc
+ * neutrals + lime + rose. No purple. No gradients. No drop shadows.
+ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: #050505;
+  --color-surface: #0b0b0c;
+  --color-surface-2: #111113;
+  --color-surface-3: #18181b;
+  --color-line: #1f1f23;
+  --color-line-strong: #2a2a2f;
+
+  --color-fg: #fafafa;
+  --color-fg-muted: #a1a1aa;
+  --color-fg-subtle: #71717a;
+  --color-fg-faint: #52525b;
+
+  --color-accent: #d6ff3d;
+  --color-accent-ink: #050505;
+  --color-up: #b6f569;
+  --color-down: #ff6e6e;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+/* hairline grid backdrop for the simulator surface */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, var(--color-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: -1px -1px;
+}
+
+.bg-grid-fine {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--color-line) 50%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--color-line) 50%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 16px 16px;
+}
+
+/* ticker marquee */
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.animate-ticker {
+  animation: ticker 60s linear infinite;
+}
+
+/* tiny pulse for live indicator */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.animate-live {
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+/* subtle blink for the cursor */
+@keyframes caret-blink {
+  0%,
+  60%,
+  100% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 0;
+  }
+}
+
+.animate-caret {
+  animation: caret-blink 1.1s ease-in-out infinite;
+}
+
+/* a faint scanline for the chart, no gradient — alternating one-pixel rows */
+.chart-scanlines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 3px,
+    color-mix(in oklab, var(--color-line) 30%, transparent) 3px,
+    color-mix(in oklab, var(--color-line) 30%, transparent) 4px
+  );
+}
+
+/* Hide scrollbars in tape-like feeds */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
 }
