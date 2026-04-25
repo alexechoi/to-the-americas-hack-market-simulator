@@ -252,6 +252,13 @@ class ExchangeRuntime:
                 # UI can update its tape before the post-fill ladder snaps in.
                 for fill in self.exchange.last_tick_fills:
                     self._emit_fill(fill)
+                if advance_event:
+                    # The event tick fully drained the exchange's pending queue,
+                    # so any intent still buffered after we matched fills above
+                    # belongs to a killed order. Drop them so a *future* fill
+                    # for the same agent doesn't inherit stale reasoning.
+                    for bucket in self._pending_intents.values():
+                        bucket.clear()
                 self._broadcast(
                     {"event": "snapshot", "data": _serialize_snapshot(snap)}
                 )

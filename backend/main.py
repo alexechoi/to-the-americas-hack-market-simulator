@@ -20,6 +20,7 @@ from notifications import router as notifications_router  # noqa: E402
 from observability import configure_observability, instrument_app  # noqa: E402
 from runtime import runtime as exchange_runtime  # noqa: E402
 from swarm import agent_swarm  # noqa: E402
+from yahoo_finance_api import router as yahoo_router  # noqa: E402
 
 configure_observability()
 
@@ -68,6 +69,7 @@ app.include_router(notifications_router)
 app.include_router(exchange_router)
 app.include_router(news_router)
 app.include_router(debug_router)
+app.include_router(yahoo_router)
 
 
 # ============================================================================

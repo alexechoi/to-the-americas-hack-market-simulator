@@ -1,7 +1,8 @@
 "use client";
 
-import { DebugTestCard } from "@/app/components/debug/DebugTestCard";
 import { DebugInferenceCard } from "@/app/components/debug/DebugInferenceCard";
+import { DebugTestCard } from "@/app/components/debug/DebugTestCard";
+import { DebugYahooCard } from "@/app/components/debug/DebugYahooCard";
 import { Footer } from "@/app/components/ui/Footer";
 import { Header } from "@/app/components/ui/Header";
 import { Tag } from "@/app/components/ui/Tag";
@@ -69,6 +70,8 @@ export default function DebugPage() {
           />
 
           <DebugInferenceCard />
+
+          <DebugYahooCard />
         </div>
       </main>
 
