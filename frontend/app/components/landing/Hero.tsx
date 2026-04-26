@@ -70,11 +70,12 @@ export function Hero() {
             </motion.p>
 
             <motion.form
+              id="ticker"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
               onSubmit={handleEnter}
-              className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center"
+              className="scroll-mt-24 mt-10 flex flex-col gap-3 sm:flex-row sm:items-center"
             >
               <label className="flex items-stretch border border-[var(--color-line-strong)] bg-[var(--color-surface)] focus-within:border-[var(--color-accent)]">
                 <span className="flex items-center px-4 font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-fg-faint)]">

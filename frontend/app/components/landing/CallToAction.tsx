@@ -43,12 +43,6 @@ export function CallToAction() {
               →
             </span>
           </Link>
-          <Link
-            href="/#ticker"
-            className="inline-flex h-12 items-center gap-2 border border-[var(--color-line-strong)] bg-transparent px-6 text-sm font-medium text-[var(--color-fg)] transition-colors hover:border-[var(--color-fg-faint)] hover:bg-[color-mix(in_oklab,var(--color-surface-2)_70%,transparent)]"
-          >
-            Inject a headline
-          </Link>
         </motion.div>
       </div>
     </section>
