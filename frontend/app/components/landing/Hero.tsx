@@ -88,7 +88,7 @@ export function Hero() {
                   maxLength={16}
                   disabled={submitting}
                   placeholder="NVDA"
-                  className="h-12 w-32 bg-transparent pr-4 font-mono text-sm tracking-[0.08em] text-[var(--color-fg)] outline-none placeholder:text-[var(--color-fg-faint)] disabled:opacity-60"
+                  className="h-12 w-16 bg-transparent pr-4 font-mono text-sm tracking-[0.08em] text-[var(--color-fg)] outline-none placeholder:text-[var(--color-fg-faint)] disabled:opacity-60"
                 />
               </label>
               <button
@@ -96,7 +96,7 @@ export function Hero() {
                 disabled={submitting || !ticker.trim()}
                 className="group inline-flex h-12 items-center gap-2 bg-[var(--color-accent)] px-6 text-sm font-medium tracking-tight text-[var(--color-accent-ink)] transition-colors hover:bg-[#e6ff5e] disabled:opacity-60 disabled:hover:bg-[var(--color-accent)]"
               >
-                {submitting ? "Bootstrapping…" : "Open the floor"}
+                {submitting ? "Bootstrapping…" : "Launch"}
                 {!submitting && (
                   <span
                     aria-hidden
